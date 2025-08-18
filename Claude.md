@@ -1,48 +1,149 @@
-# Azure Automation: Entra ID Device Cleanup
+# Azure Enterprise Security Automation Suite
 
 ## Overview
-This Azure Automation solution automatically cleans up inactive devices from your Entra ID tenant using Microsoft Graph API. The automation identifies devices that have been inactive for 90 days and performs cleanup operations based on device type.
+This comprehensive Azure automation repository contains production-ready security and compliance solutions for enterprise environments. The suite includes four core automations plus a robust validation framework to ensure secure, reliable operations.
 
-## Features
-- **Registered Device Cleanup**: Removes standard registered devices inactive for 90+ days
-- **Autopilot Device Cleanup**: Cleans up Autopilot-registered devices without removing them from Autopilot enrollment
-- **Email Notifications**: Sends warning emails to device owners before deletion and summary reports to administrators
-- **Audit Logging**: Comprehensive logging of all cleanup actions for compliance
+## Mission Statement
+Create enterprise-grade Azure automation solutions that prioritize security, maintainability, and operational excellence while providing clear guidance for future AI agents working on similar security automation projects.
 
-## How the Cleanup Logic Works
+## Core Security Automations
 
-### Device Identification Process
-1. **Query all devices** from Entra ID using Microsoft Graph API
-2. **Check last sign-in date** (`ApproximateLastSignInDateTime`) for each device
-3. **Calculate inactivity period** by comparing last sign-in with current date
-4. **Categorize devices**:
-   - **Registered Devices**: Standard Entra ID joined/registered devices (TrustType != "AzureAD")
-   - **Autopilot Devices**: Windows Autopilot enrolled devices (TrustType == "AzureAD")
+### 1. Device Cleanup Automation
+**Primary Focus**: Entra ID device lifecycle management
+- **Registered Device Cleanup**: Removes standard registered devices inactive for 90+ days  
+- **Autopilot Device Cleanup**: Cleans up Autopilot-registered devices without removing Autopilot enrollment
+- **Email Notifications**: Professional HTML notifications to device owners and IT administrators
+- **Safety Thresholds**: Prevents accidental mass deletions with configurable limits
+- **Comprehensive Reporting**: CSV exports and HTML compliance reports for audit trails
 
-### Cleanup Decision Criteria
-When a device meets the following criteria, it will be marked for cleanup:
-- **Last sign-in** is more than 90 days ago (configurable)
-- **Device has a recorded** last sign-in date (devices with null dates are skipped)
-- **For Registered Devices**: Complete removal from Entra ID
-- **For Autopilot Devices**: Removal from Entra ID only, preserving Autopilot enrollment
+### 2. MFA Compliance Monitor  
+**Primary Focus**: Microsoft Authenticator enforcement and compliance tracking
+- **Sign-In Analysis**: Monitors Azure AD audit logs for non-compliant MFA methods
+- **User Notifications**: Professional email alerts to users with non-Microsoft Authenticator usage
+- **Compliance Reporting**: Detailed CSV reports with user sign-in patterns and device information
+- **Trend Analysis**: Tracks compliance rates over time for security governance
+- **Executive Dashboards**: Summary reports for IT leadership with actionable insights
 
-### What Happens During Cleanup
-1. **Pre-cleanup Phase**:
-   - Generate list of devices meeting cleanup criteria
-   - Send warning emails to device owners (7 days before deletion)
-   - Log all devices scheduled for cleanup
-   
-2. **Cleanup Execution**:
-   - For each device marked for cleanup:
-     - Record device details in audit log
-     - Send final notification to device owner
-     - Execute deletion based on device type
-     - Update cleanup report
-   
-3. **Post-cleanup Phase**:
-   - Generate summary report
-   - Email report to administrators
-   - Archive logs for compliance
+### 3. Enterprise App Usage Monitor
+**Primary Focus**: Application lifecycle management and cost optimization  
+- **Usage Analysis**: Identifies Enterprise Applications unused for 90+ days
+- **Cost Assessment**: Analyzes potential cost savings from app consolidation
+- **Risk Evaluation**: Assesses security risks of unused applications with access permissions
+- **Business Impact Analysis**: Categorizes applications by criticality and usage patterns
+- **Cleanup Recommendations**: Provides prioritized action items for application governance
+
+### 4. Enterprise App Certificate Monitor
+**Primary Focus**: Critical security monitoring for certificate/secret expiration
+- **Certificate Lifecycle Tracking**: Monitors all Enterprise Application certificates and secrets
+- **Expiration Analysis**: Identifies expired and soon-to-expire credentials
+- **Risk Prioritization**: Focuses on unused applications with expired certificates (highest security risk)
+- **Immediate Alerts**: Real-time notifications for critical security combinations
+- **Usage Correlation**: Cross-references certificate status with application usage data
+
+## Security-First Architecture and Patterns
+
+### Validation Framework
+**Comprehensive PowerShell Validation and Security Controls**
+- **Scripts/Validate-PowerShellScripts.ps1**: Multi-layer validation covering syntax, security, error handling, and best practices
+- **Scripts/Test-GraphAuthentication.ps1**: Reusable authentication patterns using environment variables (never hardcoded credentials)
+- **Scripts/Pre-Commit-Hook.ps1**: Automated credential scanning and validation before any commit
+- **GitHub Actions CI/CD**: Automated validation pipeline for continuous security assurance
+
+### Critical Security Guardrails Implemented  
+- **Fail-Fast Permission Validation**: All scripts immediately stop execution when required Microsoft Graph permissions are missing
+- **Zero Hardcoded Credentials**: Comprehensive scanning prevents credential leaks in repository
+- **Environment Variable Patterns**: Secure testing using `$env:AZURE_CLIENT_ID`, `$env:AZURE_TENANT_ID`, `$env:AZURE_CLIENT_SECRET`
+- **Pre-Commit Security Scanning**: Automatic detection of GUIDs, Base64 patterns, and credential assignments
+- **Managed Identity for Production**: All scripts designed for managed identity authentication in production environments
+
+### Lessons Learned for Future AI Agents
+**Critical Patterns Documented in LESSONS-LEARNED.md**
+- **Permission Validation Anti-Pattern**: Never use `Write-Warning` for missing permissions - always use `throw` for fail-fast security
+- **Clear Error Messages**: Provide specific required permissions and step-by-step fix instructions
+- **Credential Management**: Never commit credentials - always use secure parameter patterns and environment variables
+- **Testing Patterns**: Comprehensive validation frameworks prevent security regressions
+- **Documentation Standards**: Security lessons learned must be captured for future development
+
+### Core Technical Implementation Patterns
+
+#### 1. Microsoft Graph API Integration
+- **Authentication**: Managed Identity (production) / Environment Variables (testing)
+- **Permission Validation**: Fail-fast validation with clear error messages
+- **Error Handling**: Comprehensive try-catch blocks with actionable guidance
+- **API Efficiency**: Pagination support for large datasets, proper filtering, and batching
+
+#### 2. Email Notification Systems
+- **Professional HTML Templates**: Corporate branding with responsive design
+- **Multi-Recipient Support**: User notifications with IT admin CC functionality  
+- **Actionable Content**: Clear instructions, deadlines, and next steps
+- **Delivery Tracking**: Success/failure logging for audit and compliance requirements
+
+#### 3. Reporting and Analytics
+- **Multiple Export Formats**: CSV for data analysis, HTML for executive reporting
+- **Comprehensive Metrics**: Compliance rates, trend analysis, risk assessments
+- **Audit Trail Generation**: Complete logging for SOX, SOC2, and security compliance
+- **Executive Dashboards**: High-level summaries with drill-down capabilities
+
+#### 4. Safety and Validation Controls
+- **WhatIf Mode**: Simulation capabilities for testing and validation
+- **Safety Thresholds**: Configurable limits to prevent accidental mass operations
+- **Exclusion Lists**: Flexible filtering for service accounts and critical systems
+- **Progressive Rollout**: Staged deployment patterns for risk mitigation
+
+## Enterprise Deployment Guidance
+
+### Required Microsoft Graph Permissions by Automation
+
+| Automation | Required Permissions | Purpose |
+|------------|---------------------|---------|
+| **Device Cleanup** | Device.ReadWrite.All, User.Read.All, Directory.ReadWrite.All, Mail.Send | Device management and notifications |
+| **MFA Compliance** | AuditLog.Read.All, User.Read.All, Mail.Send, Directory.Read.All | Audit log analysis and compliance reporting |
+| **App Usage Monitor** | Application.Read.All, AuditLog.Read.All, Directory.Read.All, Mail.Send | Application usage analysis and reporting |
+| **App Certificate Monitor** | Application.Read.All, AuditLog.Read.All, Directory.Read.All, Mail.Send | Certificate lifecycle monitoring and alerts |
+
+### Production Deployment Checklist
+- [ ] **Run credential scan** - Execute validation framework to ensure no hardcoded secrets
+- [ ] **Validate permissions** - Confirm all required Graph API permissions granted with admin consent
+- [ ] **Configure managed identity** - Set up system-assigned managed identity for authentication
+- [ ] **Test in WhatIf mode** - Validate functionality in target environment without making changes
+- [ ] **Configure monitoring** - Set up Azure Monitor alerts for automation failures and thresholds
+- [ ] **Establish exclusion lists** - Define service accounts and systems to exclude from automated processing
+- [ ] **Schedule regular execution** - Configure appropriate schedules based on business requirements
+- [ ] **Document customizations** - Record any environment-specific modifications for maintenance
+
+## Future Development Guidelines
+
+### For AI Agents Working on Similar Projects
+- **Start with security**: Implement fail-fast permission validation before any business logic
+- **Never hardcode credentials**: Always use environment variables or managed identity patterns
+- **Comprehensive error handling**: Every Graph API call should have try-catch with clear error messages
+- **Validate early and often**: Use the established validation framework for all PowerShell development
+- **Document security lessons**: Update LESSONS-LEARNED.md with any new security patterns discovered
+- **Test thoroughly**: Always test permission validation failures to ensure proper error handling
+- **Follow established patterns**: Use existing authentication and reporting patterns for consistency
+
+### Repository Structure Conventions
+```
+Project-Name/
+├── Documentation/
+│   └── CLAUDE.md                    # AI-readable implementation guidelines  
+├── Scripts/
+│   └── MainScript.ps1              # Primary automation logic
+├── Tests/
+│   └── Test-Connection.ps1         # Connection and permission testing
+├── Templates/
+│   ├── UserNotification.html       # Email templates
+│   └── AdminSummary.html
+└── Reports/                        # CSV output directory (gitignored)
+```
+
+### Security Standards for All Automations
+1. **Authentication**: Managed Identity for production, environment variables for testing
+2. **Permission Validation**: Explicit checking with fail-fast error handling
+3. **Error Reporting**: Clear messages with specific required permissions and fix instructions
+4. **Credential Management**: Zero tolerance for hardcoded credentials, comprehensive scanning
+5. **Audit Logging**: Complete operation logging for compliance and troubleshooting
+6. **Safety Controls**: WhatIf mode, safety thresholds, and exclusion list support
 
 ## Prerequisites
 
