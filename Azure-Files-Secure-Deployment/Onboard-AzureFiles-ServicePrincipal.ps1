@@ -7,6 +7,9 @@
 # Use this script ONLY if you need unattended/automated deployment.
 # For manual deployment, simply run Deploy-SecureAzureFiles.ps1 directly.
 
+#Requires -Version 7.0
+#Requires -Modules Az.Accounts, Az.Resources, Az.KeyVault
+
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
@@ -46,6 +49,64 @@ param(
 
 $ErrorActionPreference = "Stop"
 $InformationPreference = "Continue"
+
+# PowerShell and module compatibility validation
+function Test-PowerShellCompatibility {
+    Write-Host "Validating PowerShell compatibility..." -ForegroundColor Yellow
+    
+    # Check PowerShell version
+    $PSVersion = $PSVersionTable.PSVersion
+    if ($PSVersion.Major -lt 7) {
+        Write-Error @"
+PowerShell 7.0 or later is required for this script.
+Current version: $($PSVersion.ToString())
+Please install PowerShell 7 from: https://github.com/PowerShell/PowerShell/releases
+"@
+        return $false
+    }
+    Write-Host "✓ PowerShell version: $($PSVersion.ToString())" -ForegroundColor Green
+    
+    # Check required Azure modules
+    $RequiredModules = @('Az.Accounts', 'Az.Resources', 'Az.KeyVault')
+    $MissingModules = @()
+    
+    foreach ($Module in $RequiredModules) {
+        $ModuleInfo = Get-Module -Name $Module -ListAvailable | Sort-Object Version -Descending | Select-Object -First 1
+        if ($ModuleInfo) {
+            Write-Host "✓ $Module version: $($ModuleInfo.Version)" -ForegroundColor Green
+        } else {
+            $MissingModules += $Module
+            Write-Warning "✗ Missing module: $Module"
+        }
+    }
+    
+    if ($MissingModules.Count -gt 0) {
+        Write-Error @"
+Missing required Azure PowerShell modules: $($MissingModules -join ', ')
+Install missing modules with:
+Install-Module -Name $($MissingModules -join ', ') -Scope CurrentUser -Force
+"@
+        return $false
+    }
+    
+    # Check if running in Windows PowerShell (not supported)
+    if ($PSVersionTable.PSEdition -eq 'Desktop') {
+        Write-Error @"
+Windows PowerShell (Desktop edition) is not supported.
+Please use PowerShell 7+ (Core edition).
+Download from: https://github.com/PowerShell/PowerShell/releases
+"@
+        return $false
+    }
+    
+    Write-Host "✓ PowerShell compatibility validation passed" -ForegroundColor Green
+    return $true
+}
+
+# Validate compatibility before proceeding
+if (-not (Test-PowerShellCompatibility)) {
+    exit 1
+}
 
 # Security banner
 Write-Host @"
