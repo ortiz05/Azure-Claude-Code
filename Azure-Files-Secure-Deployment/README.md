@@ -2,18 +2,33 @@
 
 Deploy Azure Files with enterprise-grade security controls following industry best practices and compliance standards.
 
-## 🚀 Quick Deployment
+## 🎯 Authentication Options
+
+### ✅ Option 1: Manual Deployment (Recommended for Most Users)
+Use your Global Admin account with OAuth authentication (browser prompt):
 
 ```powershell
+# No setup required - just run the deployment script
 .\Deploy-SecureAzureFiles.ps1 `
     -SubscriptionId "your-subscription-id" `
     -ResourceGroupName "rg-secure-files" `
     -StorageAccountName "stgsecurefiles001" `
-    -Location "East US 2" `
-    -FileShareName "secure-fileshare" `
-    -SkuName "Standard_ZRS" `
-    -FileShareQuotaGB 1024
+    -Location "East US 2"
 ```
+
+### 🤖 Option 2: Service Principal Deployment (For Automation Only)
+**ONLY use this if you need unattended/automated deployment (CI/CD, API calls, etc.)**
+
+First, create a Service Principal:
+```powershell
+.\Onboard-AzureFiles-ServicePrincipal.ps1 `
+    -TenantId "your-tenant-id" `
+    -SubscriptionId "your-subscription-id"
+```
+
+Then use the generated deployment script with Service Principal authentication.
+
+## 🚀 Quick Manual Deployment (Most Common)
 
 ## 🔐 Security Features
 
@@ -37,37 +52,37 @@ Deploy Azure Files with enterprise-grade security controls following industry be
 ## 📊 Parameters
 
 ### Required Parameters
-| Parameter | Description | Example |
-|-----------|-------------|---------|
-| `SubscriptionId` | Azure subscription ID | `12345678-1234-1234-1234-123456789012` |
-| `ResourceGroupName` | Resource group name | `rg-secure-files` |
-| `StorageAccountName` | Storage account name (3-24 chars, lowercase) | `stgsecurefiles001` |
-| `Location` | Azure region | `East US 2` |
+| Parameter | Description | Requirements | Example |
+|-----------|-------------|--------------|---------|
+| `SubscriptionId` | Azure subscription ID | GUID format | `12345678-1234-1234-1234-123456789012` |
+| `ResourceGroupName` | Resource group name | 1-90 characters, alphanumeric, periods, underscores, hyphens, parentheses | `rg-secure-files` |
+| `StorageAccountName` | Storage account name | **3-24 characters, lowercase letters and numbers only, globally unique** | `stgsecurefiles001` |
+| `Location` | Azure region | Valid Azure region name | `East US 2`, `West Europe`, `Southeast Asia` |
 
 ### Optional Parameters
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `FileShareName` | `secure-fileshare` | Name of the file share |
-| `SkuName` | `Standard_ZRS` | Storage redundancy (`Standard_LRS`, `Standard_ZRS`, `Premium_LRS`, etc.) |
-| `AccessTier` | `Hot` | Storage access tier (`Hot`, `Cool`) |
-| `FileShareQuotaGB` | `1024` | File share quota in GB |
-| `EnableIdentityBasedAuth` | `$true` | Enable Azure AD authentication |
-| `RequireHttpsTrafficOnly` | `$true` | Force HTTPS-only access |
-| `EnableBackup` | `$true` | Configure for backup (manual setup required) |
+| Parameter | Default | Requirements | Description |
+|-----------|---------|--------------|-------------|
+| `FileShareName` | `secure-fileshare` | 3-63 characters, lowercase letters, numbers, and hyphens only | Name of the file share |
+| `SkuName` | `Standard_ZRS` | Valid SKU values | Storage redundancy (`Standard_LRS`, `Standard_ZRS`, `Premium_LRS`, etc.) |
+| `AccessTier` | `Hot` | `Hot` or `Cool` | Storage access tier (Hot for frequently accessed, Cool for infrequent) |
+| `FileShareQuotaGB` | `1024` | 1-102400 GB | File share quota in GB (affects billing) |
+| `EnableIdentityBasedAuth` | `$true` | Boolean | Enable Azure AD authentication |
+| `RequireHttpsTrafficOnly` | `$true` | Boolean | Force HTTPS-only access |
+| `EnableBackup` | `$true` | Boolean | Configure for backup (manual setup required) |
 
 ### Network Security Parameters
-| Parameter | Description | Example |
-|-----------|-------------|---------|
-| `VirtualNetworkResourceGroup` | VNet resource group | `rg-network` |
-| `VirtualNetworkName` | Virtual network name | `vnet-corp` |
-| `SubnetName` | Subnet name for service endpoint | `subnet-storage` |
-| `AllowedIPRanges` | Array of allowed IP ranges | `@("203.0.113.0/24", "198.51.100.0/24")` |
+| Parameter | Requirements | Description | Example |
+|-----------|--------------|-------------|---------|
+| `VirtualNetworkResourceGroup` | Valid resource group name | VNet resource group for private access | `rg-network` |
+| `VirtualNetworkName` | Valid VNet name | Virtual network name for security enhancement | `vnet-corp` |
+| `SubnetName` | Valid subnet name | Subnet name for storage service endpoint | `subnet-storage` |
+| `AllowedIPRanges` | CIDR format array | Array of allowed IP ranges | `@("203.0.113.0/24", "198.51.100.0/24")` |
 
 ### Advanced Security Parameters
-| Parameter | Description | Example |
-|-----------|-------------|---------|
-| `KeyVaultName` | Key Vault for customer-managed encryption | `kv-encryption-keys` |
-| `LogAnalyticsWorkspaceName` | Log Analytics workspace for monitoring | `law-security-logs` |
+| Parameter | Requirements | Description | Example |
+|-----------|--------------|-------------|---------|
+| `KeyVaultName` | Valid Key Vault name | Key Vault for customer-managed encryption (recommended) | `kv-encryption-keys` |
+| `LogAnalyticsWorkspaceName` | Valid workspace name | Log Analytics workspace for monitoring and diagnostics | `law-security-logs` |
 
 ## 🔧 Deployment Examples
 

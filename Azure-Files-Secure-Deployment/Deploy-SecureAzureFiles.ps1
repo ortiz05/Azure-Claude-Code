@@ -3,48 +3,57 @@
 
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $true, HelpMessage = "Azure subscription ID (GUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)")]
+    [ValidatePattern("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")]
     [string]$SubscriptionId,
     
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $true, HelpMessage = "Azure resource group name (1-90 characters, alphanumeric, periods, underscores, hyphens, parentheses)")]
+    [ValidateLength(1, 90)]
+    [ValidatePattern("^[-\w\._\(\)]+$")]
     [string]$ResourceGroupName,
     
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $true, HelpMessage = "Storage account name (3-24 characters, lowercase letters and numbers only, globally unique)")]
+    [ValidateLength(3, 24)]
+    [ValidatePattern("^[a-z0-9]+$")]
     [string]$StorageAccountName,
     
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $true, HelpMessage = "Azure region (e.g., 'East US 2', 'West Europe', 'Southeast Asia')")]
+    [ValidateNotNullOrEmpty()]
     [string]$Location,
     
-    [Parameter(Mandatory = $false)]
+    [Parameter(Mandatory = $false, HelpMessage = "File share name (3-63 characters, lowercase letters, numbers, and hyphens only)")]
+    [ValidateLength(3, 63)]
+    [ValidatePattern("^[a-z0-9-]+$")]
     [string]$FileShareName = "secure-fileshare",
     
-    [Parameter(Mandatory = $false)]
+    [Parameter(Mandatory = $false, HelpMessage = "Storage redundancy level (Standard_ZRS recommended for production)")]
     [ValidateSet("Standard_LRS", "Standard_ZRS", "Standard_GRS", "Premium_LRS", "Premium_ZRS")]
     [string]$SkuName = "Standard_ZRS",
     
-    [Parameter(Mandatory = $false)]
+    [Parameter(Mandatory = $false, HelpMessage = "Storage access tier (Hot for frequently accessed files, Cool for infrequently accessed)")]
     [ValidateSet("Hot", "Cool")]
     [string]$AccessTier = "Hot",
     
-    [Parameter(Mandatory = $false)]
+    [Parameter(Mandatory = $false, HelpMessage = "File share quota in GB (1-102400 GB, affects billing)")]
+    [ValidateRange(1, 102400)]
     [int]$FileShareQuotaGB = 1024,
     
-    [Parameter(Mandatory = $false)]
+    [Parameter(Mandatory = $false, HelpMessage = "Resource group containing the virtual network (for VNet integration)")]
     [string]$VirtualNetworkResourceGroup = "",
     
-    [Parameter(Mandatory = $false)]
+    [Parameter(Mandatory = $false, HelpMessage = "Virtual network name for private access (security enhancement)")]
     [string]$VirtualNetworkName = "",
     
-    [Parameter(Mandatory = $false)]
+    [Parameter(Mandatory = $false, HelpMessage = "Subnet name within the VNet for storage service endpoint")]
     [string]$SubnetName = "",
     
-    [Parameter(Mandatory = $false)]
+    [Parameter(Mandatory = $false, HelpMessage = "Array of allowed IP ranges in CIDR format (e.g., '203.0.113.0/24')")]
     [string[]]$AllowedIPRanges = @(),
     
-    [Parameter(Mandatory = $false)]
+    [Parameter(Mandatory = $false, HelpMessage = "Key Vault name for customer-managed encryption keys (optional but recommended)")]
     [string]$KeyVaultName = "",
     
-    [Parameter(Mandatory = $false)]
+    [Parameter(Mandatory = $false, HelpMessage = "Log Analytics workspace name for monitoring and diagnostics")]
     [string]$LogAnalyticsWorkspaceName = "",
     
     [Parameter(Mandatory = $false)]

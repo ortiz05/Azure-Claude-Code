@@ -1,6 +1,11 @@
-# Onboard-AzureFilesAutomation.ps1
-# Secure onboarding script for Azure Files deployment automation
-# Creates a dedicated service principal with minimal required permissions
+# Onboard-AzureFiles-ServicePrincipal.ps1
+# Creates a Service Principal for AUTOMATED Azure Files deployment
+# 
+# ⚠️  ONLY NEEDED FOR: Service Principal authentication (CI/CD, API automation)
+# ❌  NOT NEEDED FOR: Manual deployment with your Global Admin account (OAuth)
+# 
+# Use this script ONLY if you need unattended/automated deployment.
+# For manual deployment, simply run Deploy-SecureAzureFiles.ps1 directly.
 
 [CmdletBinding()]
 param(

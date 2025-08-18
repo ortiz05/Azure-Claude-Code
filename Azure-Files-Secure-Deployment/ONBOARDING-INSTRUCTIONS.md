@@ -1,7 +1,22 @@
-# Azure Files Automation - Secure Onboarding Instructions
+# Azure Files Service Principal Onboarding Instructions
+
+## ⚠️ IMPORTANT: When Do You Need This?
+
+**✅ USE THIS SCRIPT ONLY FOR:**
+- CI/CD pipeline automation (Azure DevOps, GitHub Actions)
+- Unattended/scheduled deployments 
+- API-driven infrastructure provisioning
+- Third-party automation tools
+
+**❌ YOU DON'T NEED THIS FOR:**
+- **Manual deployment with your Global Admin account** (most common scenario)
+- One-time setup using browser authentication (OAuth)
+- Interactive deployment sessions
 
 ## 🎯 Purpose
-This onboarding script creates a dedicated Service Principal with minimal required permissions for deploying Azure Files infrastructure. It follows security best practices including certificate-based authentication, least privilege access, and secure credential storage.
+This onboarding script creates a dedicated Service Principal with minimal required permissions for **AUTOMATED** Azure Files infrastructure deployment. It follows security best practices including certificate-based authentication, least privilege access, and secure credential storage.
+
+**For manual deployment, simply run `Deploy-SecureAzureFiles.ps1` directly - no Service Principal needed!**
 
 ## 🔒 Security Features
 - **Least Privilege**: Only assigns minimum required Azure RBAC roles
@@ -48,7 +63,7 @@ $KeyVaultName = "kv-secrets-prod"       # Optional: Store credentials in Key Vau
 ### Step 2: Basic Execution (Certificate Authentication)
 ```powershell
 # Run with default certificate authentication (RECOMMENDED)
-.\Onboard-AzureFilesAutomation.ps1 `
+.\Onboard-AzureFiles-ServicePrincipal.ps1 `
     -TenantId $TenantId `
     -SubscriptionId $SubscriptionId
 ```
@@ -58,7 +73,7 @@ $KeyVaultName = "kv-secrets-prod"       # Optional: Store credentials in Key Vau
 #### Option A: Scope to Resource Group
 ```powershell
 # Limit permissions to specific resource group
-.\Onboard-AzureFilesAutomation.ps1 `
+.\Onboard-AzureFiles-ServicePrincipal.ps1 `
     -TenantId $TenantId `
     -SubscriptionId $SubscriptionId `
     -ResourceGroupName "rg-storage-prod"
@@ -67,7 +82,7 @@ $KeyVaultName = "kv-secrets-prod"       # Optional: Store credentials in Key Vau
 #### Option B: With Key Vault Storage
 ```powershell
 # Store credentials securely in Key Vault
-.\Onboard-AzureFilesAutomation.ps1 `
+.\Onboard-AzureFiles-ServicePrincipal.ps1 `
     -TenantId $TenantId `
     -SubscriptionId $SubscriptionId `
     -KeyVaultName "kv-secrets-prod"
@@ -76,7 +91,7 @@ $KeyVaultName = "kv-secrets-prod"       # Optional: Store credentials in Key Vau
 #### Option C: Custom Certificate Settings
 ```powershell
 # Custom certificate configuration
-.\Onboard-AzureFilesAutomation.ps1 `
+.\Onboard-AzureFiles-ServicePrincipal.ps1 `
     -TenantId $TenantId `
     -SubscriptionId $SubscriptionId `
     -CertificateSubject "CN=AzureFilesAutomationProd" `
@@ -86,7 +101,7 @@ $KeyVaultName = "kv-secrets-prod"       # Optional: Store credentials in Key Vau
 #### Option D: Test Mode (WhatIf)
 ```powershell
 # Test without making changes
-.\Onboard-AzureFilesAutomation.ps1 `
+.\Onboard-AzureFiles-ServicePrincipal.ps1 `
     -TenantId $TenantId `
     -SubscriptionId $SubscriptionId `
     -WhatIf
