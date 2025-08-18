@@ -72,13 +72,31 @@ Create enterprise-grade Azure automation solutions that prioritize security, mai
 - **Pre-Commit Security Scanning**: Automatic detection of GUIDs, Base64 patterns, and credential assignments
 - **Managed Identity for Production**: All scripts designed for managed identity authentication in production environments
 
+### Azure Automation Deployment Framework
+**Complete Infrastructure-as-Code Deployment**
+- **Standardized Deployment Scripts**: Each automation includes comprehensive deployment script with module installation, scheduling, and validation
+- **Managed Identity Authentication**: All Azure Automation runbooks configured for system-assigned managed identity authentication
+- **Automated Module Management**: PowerShell module dependencies automatically installed and maintained
+- **Configurable Scheduling**: Flexible scheduling parameters with timezone support and execution frequency configuration
+- **Post-Deployment Validation**: Comprehensive deployment verification with permission checks and connectivity testing
+
+### Azure Automation Security Requirements
+**Mandatory Security Controls for All Deployments**
+- **Permission Validation**: Every runbook must validate Graph API permissions on startup with fail-fast error handling
+- **Secure Parameter Handling**: All sensitive parameters must use Azure Automation encrypted variables or managed identity
+- **Error Handling**: Comprehensive try-catch blocks with detailed error messages and troubleshooting guidance
+- **Audit Logging**: Complete operation logging for compliance with SOC2/SOX requirements
+- **Safety Thresholds**: Configurable limits to prevent accidental mass operations
+- **WhatIf Mode**: Mandatory simulation capability for testing and validation
+
 ### Lessons Learned for Future AI Agents
-**Critical Patterns Documented in LESSONS-LEARNED.md**
+**Critical Patterns Documented and Validated**
 - **Permission Validation Anti-Pattern**: Never use `Write-Warning` for missing permissions - always use `throw` for fail-fast security
 - **Clear Error Messages**: Provide specific required permissions and step-by-step fix instructions
 - **Credential Management**: Never commit credentials - always use secure parameter patterns and environment variables
 - **Testing Patterns**: Comprehensive validation frameworks prevent security regressions
 - **Documentation Standards**: Security lessons learned must be captured for future development
+- **Azure Automation Patterns**: Standardized deployment framework ensures consistent security controls across all automations
 
 ### Core Technical Implementation Patterns
 
@@ -119,15 +137,35 @@ Create enterprise-grade Azure automation solutions that prioritize security, mai
 | **Service Principal Credential Manager** | Application.Read.All, Application.ReadWrite.All, Directory.Read.All, AuditLog.Read.All, Mail.Send | Service Principal credential lifecycle management |
 | **Application Permission Auditor** | Application.Read.All, Directory.Read.All, DelegatedPermissionGrant.Read.All, AppRoleAssignment.Read.All, AuditLog.Read.All, Mail.Send | Application permission governance and compliance |
 
+### Azure Automation Deployment Matrix
+
+| Automation | Deployment Script | Schedule | README Documentation |
+|------------|------------------|----------|---------------------|
+| **Device Cleanup** | `Device-Cleanup-Automation/Azure-Automation/Deploy-DeviceCleanupAutomation.ps1` | Weekly at 03:00 UTC | Complete deployment guide with safety thresholds |
+| **MFA Compliance** | `MFA-Compliance-Monitor/Azure-Automation/Deploy-MFAComplianceMonitor.ps1` | Daily at 07:00 UTC | Executive reporting and user notification setup |
+| **App Usage Monitor** | `Enterprise-App-Usage-Monitor/Azure-Automation/Deploy-EnterpriseAppUsageMonitor.ps1` | Weekly at 04:00 UTC | Business impact analysis and cost optimization |
+| **App Certificate Monitor** | `Enterprise-App-Certificate-Monitor/Azure-Automation/Deploy-EnterpriseAppCertificateMonitor.ps1` | Daily at 05:00 UTC | Critical security alerting and risk prioritization |
+| **Service Principal Credential Manager** | `Service-Principal-Credential-Manager/Azure-Automation/Deploy-ServicePrincipalCredentialManager.ps1` | Daily at 06:00 UTC | Enterprise credential lifecycle with automated remediation |
+| **Application Permission Auditor** | `Application-Permission-Auditor/Azure-Automation/Deploy-ApplicationPermissionAuditor.ps1` | Weekly at 08:00 UTC | OAuth consent governance and over-privilege detection |
+
 ### Production Deployment Checklist
-- [ ] **Run credential scan** - Execute validation framework to ensure no hardcoded secrets
+- [ ] **Run credential scan** - Execute `Scripts/Validate-PowerShellScripts.ps1` to ensure no hardcoded secrets
 - [ ] **Validate permissions** - Confirm all required Graph API permissions granted with admin consent
 - [ ] **Configure managed identity** - Set up system-assigned managed identity for authentication
+- [ ] **Deploy using automation scripts** - Use provided deployment scripts in each `Azure-Automation/` folder
 - [ ] **Test in WhatIf mode** - Validate functionality in target environment without making changes
 - [ ] **Configure monitoring** - Set up Azure Monitor alerts for automation failures and thresholds
 - [ ] **Establish exclusion lists** - Define service accounts and systems to exclude from automated processing
-- [ ] **Schedule regular execution** - Configure appropriate schedules based on business requirements
+- [ ] **Schedule regular execution** - Use provided scheduling configuration from deployment scripts
 - [ ] **Document customizations** - Record any environment-specific modifications for maintenance
+
+### Azure Automation Deployment Process
+1. **Prerequisites Validation**: Verify Azure Automation Account exists with appropriate PowerShell execution policy
+2. **Permission Grant**: Ensure managed identity has all required Microsoft Graph permissions with admin consent
+3. **Module Installation**: Deployment scripts automatically install Microsoft Graph PowerShell modules (15-30 minutes)
+4. **Runbook Deployment**: Scripts create and publish PowerShell runbooks with embedded logic
+5. **Schedule Configuration**: Automated creation of execution schedules with configurable timing and frequency
+6. **Post-Deployment Testing**: Built-in validation confirms connectivity and permission verification
 
 ## Future Development Guidelines
 
@@ -139,6 +177,9 @@ Create enterprise-grade Azure automation solutions that prioritize security, mai
 - **Document security lessons**: Update LESSONS-LEARNED.md with any new security patterns discovered
 - **Test thoroughly**: Always test permission validation failures to ensure proper error handling
 - **Follow established patterns**: Use existing authentication and reporting patterns for consistency
+- **Azure Automation Standard**: Create deployment scripts following the established template patterns
+- **Comprehensive Documentation**: Each automation requires main README plus Azure Automation deployment README
+- **Scheduling Consistency**: Follow the established scheduling pattern to prevent automation conflicts
 
 ### Repository Structure Conventions
 ```
@@ -147,6 +188,9 @@ Project-Name/
 │   └── CLAUDE.md                    # AI-readable implementation guidelines  
 ├── Scripts/
 │   └── MainScript.ps1              # Primary automation logic
+├── Azure-Automation/
+│   ├── Deploy-ProjectName.ps1      # Azure Automation deployment script
+│   └── README.md                   # Deployment-specific documentation
 ├── Tests/
 │   └── Test-Connection.ps1         # Connection and permission testing
 ├── Templates/
@@ -154,6 +198,15 @@ Project-Name/
 │   └── AdminSummary.html
 └── Reports/                        # CSV output directory (gitignored)
 ```
+
+### Mandatory Azure Automation Requirements
+**Every new automation MUST include:**
+1. **Main automation script** with fail-fast permission validation
+2. **Azure Automation deployment script** following established template patterns
+3. **Deployment README** with quick start guide and parameter documentation
+4. **Permission documentation** with specific Graph API requirements
+5. **Scheduling configuration** that avoids conflicts with existing automations
+6. **Security validation** using the established validation framework
 
 ### Security Standards for All Automations
 1. **Authentication**: Managed Identity for production, environment variables for testing
