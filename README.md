@@ -36,12 +36,52 @@ Automated solution for cleaning up inactive devices from Entra ID (Azure Active 
 
 **[Full Documentation →](./Device-Cleanup-Automation/Documentation/CLAUDE.md)**
 
-### 2. Future Projects (Coming Soon)
+### 2. MFA Compliance Monitor
+Security automation for enforcing Microsoft Authenticator compliance across your organization.
+
+**Features:**
+- Analyzes sign-in logs for non-compliant MFA usage
+- Sends professional email notifications to users
+- Detailed device and location tracking
+- Admin dashboard with compliance metrics
+- User exclusion lists and safety controls
+- Comprehensive audit trails
+
+**[Full Documentation →](./MFA-Compliance-Monitor/README.md)**
+
+### 3. Enterprise App Usage Monitor
+Identifies unused Enterprise Applications for cost optimization and security cleanup.
+
+**Features:**
+- Analyzes application usage over configurable periods
+- Risk assessment with business impact analysis
+- Cost savings estimates and ROI calculations
+- Publisher analysis and compliance reporting
+- Executive dashboards and detailed CSV exports
+- Integration with application lifecycle management
+
+**[Full Documentation →](./Enterprise-App-Usage-Monitor/README.md)**
+
+### 4. Enterprise App Certificate Monitor
+**🚨 CRITICAL SECURITY AUTOMATION** - Identifies unused applications with expired certificates.
+
+**Features:**
+- Detects critical combination: unused apps + expired certificates
+- Immediate security alerts for high-risk applications
+- Comprehensive certificate lifecycle tracking
+- Risk-based prioritization and escalation
+- Emergency response procedures
+- Compliance and audit support
+
+**[Full Documentation →](./Enterprise-App-Certificate-Monitor/README.md)**
+
+### 5. Future Projects (Planned)
 - User Account Lifecycle Management
 - Azure Resource Tagging Automation
 - Cost Optimization Scripts
-- Security Compliance Checks
-- Backup and Recovery Automation
+- Conditional Access Policy Compliance
+- Guest User Access Reviews
+- Service Principal Credential Management
 
 ## 🛠️ Prerequisites
 
