@@ -1,7 +1,7 @@
 # Azure Enterprise Security Automation Suite
 
 ## Overview
-This comprehensive Azure automation repository contains production-ready security and compliance solutions for enterprise environments. The suite includes four core automations plus a robust validation framework to ensure secure, reliable operations.
+This comprehensive Azure automation repository contains production-ready security and compliance solutions for enterprise environments. The suite includes six core automations plus a robust validation framework to ensure secure, reliable operations.
 
 ## Mission Statement
 Create enterprise-grade Azure automation solutions that prioritize security, maintainability, and operational excellence while providing clear guidance for future AI agents working on similar security automation projects.
@@ -39,6 +39,22 @@ Create enterprise-grade Azure automation solutions that prioritize security, mai
 - **Risk Prioritization**: Focuses on unused applications with expired certificates (highest security risk)
 - **Immediate Alerts**: Real-time notifications for critical security combinations
 - **Usage Correlation**: Cross-references certificate status with application usage data
+
+### 5. Service Principal Credential Manager
+**Primary Focus**: Enterprise Service Principal credential lifecycle management
+- **Comprehensive Credential Discovery**: Scans all Service Principals for certificate and secret-based credentials
+- **Advanced Risk Assessment**: Multi-factor scoring with usage correlation and business impact analysis
+- **Automated Remediation**: Safe cleanup of unused credentials with comprehensive audit logging
+- **Enterprise Reporting**: Executive dashboards and detailed compliance documentation for SOC2/SOX audits
+- **DevOps Integration**: Hooks for automated certificate renewal and rotation workflows
+
+### 6. Application Permission Auditor
+**Primary Focus**: Enterprise application permission governance and compliance
+- **Comprehensive Permission Analysis**: Scans all Enterprise Applications for Microsoft Graph API permissions
+- **OAuth Consent Monitoring**: Tracks delegated and application permissions with consent type analysis
+- **Over-Privilege Detection**: Identifies applications violating principle of least privilege
+- **Risk-Based Prioritization**: Focuses on unused applications with dangerous permissions (critical attack vectors)
+- **Governance Automation**: Admin consent compliance monitoring and permission approval workflows
 
 ## Security-First Architecture and Patterns
 
@@ -100,6 +116,8 @@ Create enterprise-grade Azure automation solutions that prioritize security, mai
 | **MFA Compliance** | AuditLog.Read.All, User.Read.All, Mail.Send, Directory.Read.All | Audit log analysis and compliance reporting |
 | **App Usage Monitor** | Application.Read.All, AuditLog.Read.All, Directory.Read.All, Mail.Send | Application usage analysis and reporting |
 | **App Certificate Monitor** | Application.Read.All, AuditLog.Read.All, Directory.Read.All, Mail.Send | Certificate lifecycle monitoring and alerts |
+| **Service Principal Credential Manager** | Application.Read.All, Application.ReadWrite.All, Directory.Read.All, AuditLog.Read.All, Mail.Send | Service Principal credential lifecycle management |
+| **Application Permission Auditor** | Application.Read.All, Directory.Read.All, DelegatedPermissionGrant.Read.All, AppRoleAssignment.Read.All, AuditLog.Read.All, Mail.Send | Application permission governance and compliance |
 
 ### Production Deployment Checklist
 - [ ] **Run credential scan** - Execute validation framework to ensure no hardcoded secrets
