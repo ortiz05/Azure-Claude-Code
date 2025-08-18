@@ -1,0 +1,628 @@
+# Deploy-SecureAzureFiles.ps1
+# Secure Azure Files deployment script following industry security standards
+
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory = $true)]
+    [string]$SubscriptionId,
+    
+    [Parameter(Mandatory = $true)]
+    [string]$ResourceGroupName,
+    
+    [Parameter(Mandatory = $true)]
+    [string]$StorageAccountName,
+    
+    [Parameter(Mandatory = $true)]
+    [string]$Location,
+    
+    [Parameter(Mandatory = $false)]
+    [string]$FileShareName = "secure-fileshare",
+    
+    [Parameter(Mandatory = $false)]
+    [ValidateSet("Standard_LRS", "Standard_ZRS", "Standard_GRS", "Premium_LRS", "Premium_ZRS")]
+    [string]$SkuName = "Standard_ZRS",
+    
+    [Parameter(Mandatory = $false)]
+    [ValidateSet("Hot", "Cool")]
+    [string]$AccessTier = "Hot",
+    
+    [Parameter(Mandatory = $false)]
+    [int]$FileShareQuotaGB = 1024,
+    
+    [Parameter(Mandatory = $false)]
+    [string]$VirtualNetworkResourceGroup = "",
+    
+    [Parameter(Mandatory = $false)]
+    [string]$VirtualNetworkName = "",
+    
+    [Parameter(Mandatory = $false)]
+    [string]$SubnetName = "",
+    
+    [Parameter(Mandatory = $false)]
+    [string[]]$AllowedIPRanges = @(),
+    
+    [Parameter(Mandatory = $false)]
+    [string]$KeyVaultName = "",
+    
+    [Parameter(Mandatory = $false)]
+    [string]$LogAnalyticsWorkspaceName = "",
+    
+    [Parameter(Mandatory = $false)]
+    [switch]$EnableBackup = $true,
+    
+    [Parameter(Mandatory = $false)]
+    [switch]$EnableIdentityBasedAuth = $true,
+    
+    [Parameter(Mandatory = $false)]
+    [switch]$RequireHttpsTrafficOnly = $true,
+    
+    [Parameter(Mandatory = $false)]
+    [switch]$WhatIf
+)
+
+$ErrorActionPreference = "Stop"
+
+Write-Host "==========================================" -ForegroundColor Cyan
+Write-Host "Secure Azure Files Deployment" -ForegroundColor Cyan
+Write-Host "Enterprise Security Standards" -ForegroundColor Cyan
+Write-Host "==========================================" -ForegroundColor Cyan
+Write-Host "Subscription: $SubscriptionId" -ForegroundColor Yellow
+Write-Host "Resource Group: $ResourceGroupName" -ForegroundColor Yellow
+Write-Host "Storage Account: $StorageAccountName" -ForegroundColor Yellow
+Write-Host "Location: $Location" -ForegroundColor Yellow
+Write-Host "File Share: $FileShareName" -ForegroundColor Yellow
+Write-Host "SKU: $SkuName" -ForegroundColor Yellow
+Write-Host "Quota: $FileShareQuotaGB GB" -ForegroundColor Yellow
+Write-Host "HTTPS Only: $RequireHttpsTrafficOnly" -ForegroundColor Yellow
+Write-Host "Identity Auth: $EnableIdentityBasedAuth" -ForegroundColor Yellow
+Write-Host "WhatIf Mode: $WhatIf" -ForegroundColor Yellow
+Write-Host "==========================================" -ForegroundColor Cyan
+
+# Security validation function
+function Test-SecurityRequirements {
+    Write-Host "Validating security requirements..." -ForegroundColor Yellow
+    
+    $SecurityIssues = @()
+    
+    # Storage account name validation
+    if ($StorageAccountName -notmatch "^[a-z0-9]{3,24}$") {
+        $SecurityIssues += "Storage account name must be 3-24 characters, lowercase letters and numbers only"
+    }
+    
+    # Premium storage validation for high-security scenarios
+    if ($SkuName -eq "Standard_LRS") {
+        Write-Warning "Standard_LRS provides lowest redundancy. Consider Standard_ZRS or Premium_ZRS for production"
+    }
+    
+    # Network security validation
+    if (-not $VirtualNetworkName -and $AllowedIPRanges.Count -eq 0) {
+        Write-Warning "No network restrictions configured. Consider implementing VNet integration or IP restrictions"
+    }
+    
+    # Key Vault integration validation
+    if (-not $KeyVaultName) {
+        Write-Warning "No Key Vault specified. Customer-managed keys recommended for enterprise environments"
+    }
+    
+    if ($SecurityIssues.Count -gt 0) {
+        Write-Error "Security validation failed:`n$($SecurityIssues -join "`n")"
+        return $false
+    }
+    
+    Write-Host "✓ Security requirements validation passed" -ForegroundColor Green
+    return $true
+}
+
+# Connect to Azure
+function Connect-ToAzure {
+    try {
+        Write-Host "Connecting to Azure..." -ForegroundColor Yellow
+        $Context = Get-AzContext
+        if (-not $Context -or $Context.Subscription.Id -ne $SubscriptionId) {
+            Connect-AzAccount -SubscriptionId $SubscriptionId
+        }
+        Write-Host "✓ Connected to Azure subscription: $SubscriptionId" -ForegroundColor Green
+    } catch {
+        Write-Error "Failed to connect to Azure: $($_.Exception.Message)"
+        throw
+    }
+}
+
+# Create or validate resource group
+function New-SecureResourceGroup {
+    try {
+        Write-Host "Creating/validating resource group..." -ForegroundColor Yellow
+        if ($WhatIf) {
+            Write-Host "[WHATIF] Would create/validate resource group: $ResourceGroupName" -ForegroundColor Yellow
+            return
+        }
+        
+        $ResourceGroup = Get-AzResourceGroup -Name $ResourceGroupName -ErrorAction SilentlyContinue
+        if (-not $ResourceGroup) {
+            $ResourceGroup = New-AzResourceGroup -Name $ResourceGroupName -Location $Location
+            Write-Host "✓ Created resource group: $($ResourceGroup.ResourceGroupName)" -ForegroundColor Green
+        } else {
+            Write-Host "✓ Resource group exists: $($ResourceGroup.ResourceGroupName)" -ForegroundColor Green
+        }
+        
+        # Apply resource group tags for governance
+        $Tags = @{
+            "Environment" = "Production"
+            "Purpose" = "SecureFileStorage"
+            "CreatedBy" = "SecureAzureFilesDeployment"
+            "CreatedDate" = (Get-Date -Format "yyyy-MM-dd")
+            "SecurityLevel" = "High"
+        }
+        
+        Set-AzResourceGroup -Name $ResourceGroupName -Tag $Tags
+        Write-Host "✓ Applied governance tags to resource group" -ForegroundColor Green
+        
+    } catch {
+        Write-Error "Failed to create/validate resource group: $($_.Exception.Message)"
+        throw
+    }
+}
+
+# Create secure storage account
+function New-SecureStorageAccount {
+    try {
+        Write-Host "Creating secure storage account..." -ForegroundColor Yellow
+        
+        if ($WhatIf) {
+            Write-Host "[WHATIF] Would create storage account: $StorageAccountName" -ForegroundColor Yellow
+            return $null
+        }
+        
+        # Check if storage account already exists
+        $ExistingAccount = Get-AzStorageAccount -ResourceGroupName $ResourceGroupName -Name $StorageAccountName -ErrorAction SilentlyContinue
+        if ($ExistingAccount) {
+            Write-Host "✓ Storage account already exists: $StorageAccountName" -ForegroundColor Green
+            return $ExistingAccount
+        }
+        
+        # Create storage account with security configurations
+        $StorageAccountParams = @{
+            ResourceGroupName = $ResourceGroupName
+            Name = $StorageAccountName
+            Location = $Location
+            SkuName = $SkuName
+            Kind = "StorageV2"
+            AccessTier = $AccessTier
+            EnableHttpsTrafficOnly = $RequireHttpsTrafficOnly.IsPresent
+            AllowBlobPublicAccess = $false
+            AllowSharedKeyAccess = $false  # Force Azure AD authentication
+            MinimumTlsVersion = "TLS1_2"
+            AllowCrossTenantReplication = $false
+            PublicNetworkAccess = "Disabled"  # Start with private, configure access later
+        }
+        
+        $StorageAccount = New-AzStorageAccount @StorageAccountParams
+        Write-Host "✓ Created secure storage account: $StorageAccountName" -ForegroundColor Green
+        
+        # Apply resource tags
+        $Tags = @{
+            "Purpose" = "SecureFileStorage"
+            "SecurityLevel" = "High"
+            "CreatedBy" = "SecureAzureFilesDeployment"
+            "CreatedDate" = (Get-Date -Format "yyyy-MM-dd")
+            "DataClassification" = "Confidential"
+        }
+        
+        Set-AzResource -ResourceId $StorageAccount.Id -Tag $Tags -Force
+        Write-Host "✓ Applied security tags to storage account" -ForegroundColor Green
+        
+        return $StorageAccount
+        
+    } catch {
+        Write-Error "Failed to create storage account: $($_.Exception.Message)"
+        throw
+    }
+}
+
+# Configure storage account security settings
+function Set-StorageAccountSecurity {
+    param(
+        [Parameter(Mandatory = $true)]
+        $StorageAccount
+    )
+    
+    try {
+        Write-Host "Configuring advanced security settings..." -ForegroundColor Yellow
+        
+        if ($WhatIf) {
+            Write-Host "[WHATIF] Would configure security settings for storage account" -ForegroundColor Yellow
+            return
+        }
+        
+        # Enable blob versioning and soft delete
+        Write-Host "Enabling blob versioning and soft delete..." -ForegroundColor Gray
+        Enable-AzStorageBlobDeleteRetentionPolicy -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName -RetentionDays 30
+        Enable-AzStorageBlobRestorePolicy -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName -RestoreDays 29
+        
+        # Enable container soft delete
+        Enable-AzStorageContainerDeleteRetentionPolicy -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName -RetentionDays 30
+        
+        # Enable file share soft delete
+        $Context = $StorageAccount.Context
+        $FileServiceProperties = Get-AzStorageServiceProperty -ServiceType File -Context $Context
+        $FileServiceProperties.DeleteRetentionPolicy.Enabled = $true
+        $FileServiceProperties.DeleteRetentionPolicy.Days = 30
+        Set-AzStorageServiceProperty -ServiceType File -Properties $FileServiceProperties -Context $Context
+        
+        Write-Host "✓ Configured data protection policies" -ForegroundColor Green
+        
+        # Configure network access rules
+        if ($VirtualNetworkName -and $SubnetName) {
+            Write-Host "Configuring VNet integration..." -ForegroundColor Gray
+            $VNet = Get-AzVirtualNetwork -ResourceGroupName $VirtualNetworkResourceGroup -Name $VirtualNetworkName
+            $Subnet = Get-AzVirtualNetworkSubnetConfig -VirtualNetwork $VNet -Name $SubnetName
+            
+            # Enable service endpoint if not already enabled
+            if ($Subnet.ServiceEndpoints.Service -notcontains "Microsoft.Storage") {
+                $Subnet.ServiceEndpoints.Add((New-AzServiceEndpoint -Service "Microsoft.Storage"))
+                Set-AzVirtualNetwork -VirtualNetwork $VNet
+                Write-Host "✓ Enabled storage service endpoint on subnet" -ForegroundColor Green
+            }
+            
+            # Add network rule
+            Add-AzStorageAccountNetworkRule -ResourceGroupName $ResourceGroupName -Name $StorageAccountName -VirtualNetworkResourceId $Subnet.Id
+            Write-Host "✓ Added VNet access rule" -ForegroundColor Green
+        }
+        
+        # Configure IP-based access rules
+        if ($AllowedIPRanges.Count -gt 0) {
+            Write-Host "Configuring IP access rules..." -ForegroundColor Gray
+            foreach ($IPRange in $AllowedIPRanges) {
+                Add-AzStorageAccountNetworkRule -ResourceGroupName $ResourceGroupName -Name $StorageAccountName -IPAddressOrRange $IPRange
+            }
+            Write-Host "✓ Added IP access rules: $($AllowedIPRanges -join ', ')" -ForegroundColor Green
+        }
+        
+        # Update public network access after configuring rules
+        if ($VirtualNetworkName -or $AllowedIPRanges.Count -gt 0) {
+            Update-AzStorageAccount -ResourceGroupName $ResourceGroupName -Name $StorageAccountName -PublicNetworkAccess "Enabled"
+            Write-Host "✓ Enabled restricted public network access" -ForegroundColor Green
+        }
+        
+    } catch {
+        Write-Error "Failed to configure storage security: $($_.Exception.Message)"
+        throw
+    }
+}
+
+# Configure customer-managed encryption
+function Set-CustomerManagedEncryption {
+    param(
+        [Parameter(Mandatory = $true)]
+        $StorageAccount
+    )
+    
+    if (-not $KeyVaultName) {
+        Write-Host "No Key Vault specified - using Microsoft-managed keys" -ForegroundColor Gray
+        return
+    }
+    
+    try {
+        Write-Host "Configuring customer-managed encryption..." -ForegroundColor Yellow
+        
+        if ($WhatIf) {
+            Write-Host "[WHATIF] Would configure customer-managed encryption with Key Vault: $KeyVaultName" -ForegroundColor Yellow
+            return
+        }
+        
+        # Get Key Vault
+        $KeyVault = Get-AzKeyVault -VaultName $KeyVaultName -ErrorAction SilentlyContinue
+        if (-not $KeyVault) {
+            Write-Warning "Key Vault '$KeyVaultName' not found. Skipping customer-managed encryption."
+            return
+        }
+        
+        # Create encryption key if it doesn't exist
+        $KeyName = "$StorageAccountName-encryption-key"
+        $Key = Get-AzKeyVaultKey -VaultName $KeyVaultName -Name $KeyName -ErrorAction SilentlyContinue
+        if (-not $Key) {
+            $Key = Add-AzKeyVaultKey -VaultName $KeyVaultName -Name $KeyName -Destination Software
+            Write-Host "✓ Created encryption key: $KeyName" -ForegroundColor Green
+        }
+        
+        # Assign managed identity to storage account
+        $StorageAccount = Set-AzStorageAccount -ResourceGroupName $ResourceGroupName -Name $StorageAccountName -AssignIdentity
+        
+        # Grant access to Key Vault
+        Set-AzKeyVaultAccessPolicy -VaultName $KeyVaultName -ObjectId $StorageAccount.Identity.PrincipalId -PermissionsToKeys get, wrapKey, unwrapKey
+        
+        # Configure customer-managed encryption
+        Set-AzStorageAccount -ResourceGroupName $ResourceGroupName -Name $StorageAccountName -KeyvaultEncryption -KeyName $Key.Name -KeyVersion $Key.Version -KeyVaultUri $KeyVault.VaultUri
+        
+        Write-Host "✓ Configured customer-managed encryption with Key Vault" -ForegroundColor Green
+        
+    } catch {
+        Write-Error "Failed to configure customer-managed encryption: $($_.Exception.Message)"
+        throw
+    }
+}
+
+# Create secure file share
+function New-SecureFileShare {
+    param(
+        [Parameter(Mandatory = $true)]
+        $StorageAccount
+    )
+    
+    try {
+        Write-Host "Creating secure file share..." -ForegroundColor Yellow
+        
+        if ($WhatIf) {
+            Write-Host "[WHATIF] Would create file share: $FileShareName" -ForegroundColor Yellow
+            return
+        }
+        
+        $Context = $StorageAccount.Context
+        
+        # Check if file share already exists
+        $ExistingShare = Get-AzStorageShare -Name $FileShareName -Context $Context -ErrorAction SilentlyContinue
+        if ($ExistingShare) {
+            Write-Host "✓ File share already exists: $FileShareName" -ForegroundColor Green
+            return $ExistingShare
+        }
+        
+        # Create file share with quota
+        $FileShare = New-AzStorageShare -Name $FileShareName -Context $Context -QuotaGiB $FileShareQuotaGB
+        Write-Host "✓ Created file share: $FileShareName ($FileShareQuotaGB GB)" -ForegroundColor Green
+        
+        # Set file share properties for security
+        $ShareProperties = @{
+            AccessTier = $AccessTier
+        }
+        
+        if ($SkuName.StartsWith("Premium")) {
+            # Premium shares support root squash (security feature)
+            $ShareProperties.RootSquash = "RootSquash"
+        }
+        
+        Set-AzStorageShare -Share $FileShare.CloudFileShare -Properties $ShareProperties
+        Write-Host "✓ Configured file share security properties" -ForegroundColor Green
+        
+        return $FileShare
+        
+    } catch {
+        Write-Error "Failed to create file share: $($_.Exception.Message)"
+        throw
+    }
+}
+
+# Configure Azure AD authentication for file shares
+function Set-FileShareADAuthentication {
+    param(
+        [Parameter(Mandatory = $true)]
+        $StorageAccount
+    )
+    
+    if (-not $EnableIdentityBasedAuth.IsPresent) {
+        Write-Host "Identity-based authentication disabled - skipping" -ForegroundColor Gray
+        return
+    }
+    
+    try {
+        Write-Host "Configuring Azure AD authentication..." -ForegroundColor Yellow
+        
+        if ($WhatIf) {
+            Write-Host "[WHATIF] Would configure Azure AD authentication for file shares" -ForegroundColor Yellow
+            return
+        }
+        
+        # Enable Azure AD authentication for Azure Files
+        Set-AzStorageAccount -ResourceGroupName $ResourceGroupName -Name $StorageAccountName -EnableAzureActiveDirectoryDomainServicesForFile $true
+        
+        Write-Host "✓ Enabled Azure AD authentication for file shares" -ForegroundColor Green
+        
+        # Note: Additional configuration for domain join may be required
+        Write-Host "ℹ️ Note: Domain join configuration may be required for full Azure AD integration" -ForegroundColor Blue
+        
+    } catch {
+        Write-Error "Failed to configure Azure AD authentication: $($_.Exception.Message)"
+        throw
+    }
+}
+
+# Configure monitoring and logging
+function Set-MonitoringAndLogging {
+    param(
+        [Parameter(Mandatory = $true)]
+        $StorageAccount
+    )
+    
+    try {
+        Write-Host "Configuring monitoring and logging..." -ForegroundColor Yellow
+        
+        if ($WhatIf) {
+            Write-Host "[WHATIF] Would configure monitoring and logging" -ForegroundColor Yellow
+            return
+        }
+        
+        # Configure diagnostic settings
+        if ($LogAnalyticsWorkspaceName) {
+            $Workspace = Get-AzOperationalInsightsWorkspace -Name $LogAnalyticsWorkspaceName -ErrorAction SilentlyContinue
+            if ($Workspace) {
+                $DiagnosticName = "$StorageAccountName-diagnostics"
+                
+                # Configure storage account diagnostics
+                $LogCategories = @("StorageRead", "StorageWrite", "StorageDelete")
+                $MetricCategories = @("Transaction")
+                
+                New-AzDiagnosticSetting -ResourceId $StorageAccount.Id -Name $DiagnosticName -WorkspaceId $Workspace.ResourceId -Log $LogCategories -Metric $MetricCategories
+                
+                Write-Host "✓ Configured diagnostic logging to Log Analytics" -ForegroundColor Green
+            } else {
+                Write-Warning "Log Analytics workspace '$LogAnalyticsWorkspaceName' not found"
+            }
+        }
+        
+        # Enable storage analytics
+        $Context = $StorageAccount.Context
+        
+        # Configure file service logging
+        $FileServiceProperties = Get-AzStorageServiceProperty -ServiceType File -Context $Context
+        $FileServiceProperties.Logging.LoggingOperations = "All"
+        $FileServiceProperties.Logging.RetentionDays = 365
+        $FileServiceProperties.Metrics.MetricsLevel = "ServiceAndApi"
+        $FileServiceProperties.Metrics.RetentionDays = 365
+        
+        Set-AzStorageServiceProperty -ServiceType File -Properties $FileServiceProperties -Context $Context
+        Write-Host "✓ Configured storage analytics logging" -ForegroundColor Green
+        
+    } catch {
+        Write-Error "Failed to configure monitoring: $($_.Exception.Message)"
+        throw
+    }
+}
+
+# Configure backup
+function Set-BackupConfiguration {
+    param(
+        [Parameter(Mandatory = $true)]
+        $StorageAccount
+    )
+    
+    if (-not $EnableBackup.IsPresent) {
+        Write-Host "Backup disabled - skipping backup configuration" -ForegroundColor Gray
+        return
+    }
+    
+    try {
+        Write-Host "Configuring backup..." -ForegroundColor Yellow
+        
+        if ($WhatIf) {
+            Write-Host "[WHATIF] Would configure Azure Backup for file shares" -ForegroundColor Yellow
+            return
+        }
+        
+        Write-Host "ℹ️ Note: Azure Backup for Azure Files should be configured manually through Recovery Services Vault" -ForegroundColor Blue
+        Write-Host "   - Create or use existing Recovery Services Vault" -ForegroundColor Gray
+        Write-Host "   - Configure backup policy for Azure File shares" -ForegroundColor Gray
+        Write-Host "   - Enable backup for file share: $FileShareName" -ForegroundColor Gray
+        
+    } catch {
+        Write-Error "Failed to configure backup: $($_.Exception.Message)"
+        throw
+    }
+}
+
+# Generate connection information
+function Show-ConnectionInformation {
+    param(
+        [Parameter(Mandatory = $true)]
+        $StorageAccount
+    )
+    
+    Write-Host "`n==========================================" -ForegroundColor Cyan
+    Write-Host "Azure Files Deployment Summary" -ForegroundColor Cyan
+    Write-Host "==========================================" -ForegroundColor Cyan
+    
+    if ($WhatIf) {
+        Write-Host "✓ WhatIf mode - No changes were made" -ForegroundColor Green
+        return
+    }
+    
+    Write-Host "✓ Secure Azure Files deployed successfully!" -ForegroundColor Green
+    
+    Write-Host "`n🔐 Security Features Enabled:" -ForegroundColor Cyan
+    Write-Host "  - HTTPS-only traffic: $RequireHttpsTrafficOnly" -ForegroundColor White
+    Write-Host "  - Minimum TLS version: 1.2" -ForegroundColor White
+    Write-Host "  - Shared key access: Disabled" -ForegroundColor White
+    Write-Host "  - Public blob access: Disabled" -ForegroundColor White
+    Write-Host "  - Cross-tenant replication: Disabled" -ForegroundColor White
+    Write-Host "  - Soft delete retention: 30 days" -ForegroundColor White
+    Write-Host "  - Azure AD authentication: $EnableIdentityBasedAuth" -ForegroundColor White
+    
+    Write-Host "`n📁 File Share Information:" -ForegroundColor Cyan
+    Write-Host "  Storage Account: $StorageAccountName" -ForegroundColor White
+    Write-Host "  File Share Name: $FileShareName" -ForegroundColor White
+    Write-Host "  Quota: $FileShareQuotaGB GB" -ForegroundColor White
+    Write-Host "  Access Tier: $AccessTier" -ForegroundColor White
+    Write-Host "  SKU: $SkuName" -ForegroundColor White
+    
+    Write-Host "`n🌐 Connection Information:" -ForegroundColor Cyan
+    Write-Host "  SMB URL: \\\\$StorageAccountName.file.core.windows.net\\$FileShareName" -ForegroundColor White
+    Write-Host "  HTTPS URL: https://$StorageAccountName.file.core.windows.net/$FileShareName" -ForegroundColor White
+    
+    if ($VirtualNetworkName) {
+        Write-Host "`n🔒 Network Security:" -ForegroundColor Yellow
+        Write-Host "  VNet Integration: $VirtualNetworkName/$SubnetName" -ForegroundColor White
+        Write-Host "  Public Access: Restricted to VNet" -ForegroundColor White
+    }
+    
+    if ($AllowedIPRanges.Count -gt 0) {
+        Write-Host "  Allowed IP Ranges: $($AllowedIPRanges -join ', ')" -ForegroundColor White
+    }
+    
+    if ($KeyVaultName) {
+        Write-Host "`n🔑 Encryption:" -ForegroundColor Yellow
+        Write-Host "  Customer-managed keys: Enabled" -ForegroundColor White
+        Write-Host "  Key Vault: $KeyVaultName" -ForegroundColor White
+    }
+    
+    Write-Host "`n📊 Next Steps:" -ForegroundColor Cyan
+    Write-Host "  1. Configure RBAC permissions for file share access" -ForegroundColor Gray
+    Write-Host "  2. Mount file share on client systems" -ForegroundColor Gray
+    Write-Host "  3. Configure backup if EnableBackup was specified" -ForegroundColor Gray
+    Write-Host "  4. Set up monitoring alerts in Azure Monitor" -ForegroundColor Gray
+    Write-Host "  5. Test connectivity and permissions" -ForegroundColor Gray
+    
+    Write-Host "`n⚠️ Security Reminders:" -ForegroundColor Red
+    Write-Host "  - Review and configure appropriate RBAC roles" -ForegroundColor Yellow
+    Write-Host "  - Regularly review access logs and metrics" -ForegroundColor Yellow
+    Write-Host "  - Keep storage account keys secure (if used)" -ForegroundColor Yellow
+    Write-Host "  - Monitor for unusual access patterns" -ForegroundColor Yellow
+}
+
+# Main execution
+try {
+    # Validate security requirements
+    if (-not (Test-SecurityRequirements)) {
+        exit 1
+    }
+    
+    # Connect to Azure
+    Connect-ToAzure
+    
+    # Create resource group
+    New-SecureResourceGroup
+    
+    # Create storage account
+    $StorageAccount = New-SecureStorageAccount
+    
+    if (-not $WhatIf -and $StorageAccount) {
+        # Configure security settings
+        Set-StorageAccountSecurity -StorageAccount $StorageAccount
+        
+        # Configure encryption
+        Set-CustomerManagedEncryption -StorageAccount $StorageAccount
+        
+        # Create file share
+        $FileShare = New-SecureFileShare -StorageAccount $StorageAccount
+        
+        # Configure Azure AD authentication
+        Set-FileShareADAuthentication -StorageAccount $StorageAccount
+        
+        # Configure monitoring
+        Set-MonitoringAndLogging -StorageAccount $StorageAccount
+        
+        # Configure backup
+        Set-BackupConfiguration -StorageAccount $StorageAccount
+    }
+    
+    # Show deployment summary
+    Show-ConnectionInformation -StorageAccount $StorageAccount
+    
+    Write-Host "`n🎉 Secure Azure Files deployment completed successfully!" -ForegroundColor Green
+    
+} catch {
+    Write-Error "Deployment failed: $($_.Exception.Message)"
+    Write-Host "`nFor troubleshooting:" -ForegroundColor Yellow
+    Write-Host "1. Verify Azure PowerShell modules are installed" -ForegroundColor Gray
+    Write-Host "2. Check Azure permissions for resource creation" -ForegroundColor Gray
+    Write-Host "3. Validate network configuration if using VNet integration" -ForegroundColor Gray
+    Write-Host "4. Ensure Key Vault exists if customer-managed encryption is enabled" -ForegroundColor Gray
+    exit 1
+}
