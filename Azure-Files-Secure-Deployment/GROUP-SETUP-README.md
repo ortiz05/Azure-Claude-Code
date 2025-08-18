@@ -76,6 +76,7 @@ Add-AzADGroupMember -TargetGroupId "group-id-from-output" -MemberUserPrincipalNa
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `SubscriptionId` | ✅ Yes | - | Azure subscription ID (GUID format) |
+| `TenantId` | ❌ No | (current tenant) | Azure AD tenant ID (GUID format) - useful for multi-tenant scenarios |
 | `ResourceGroupName` | ✅ Yes | - | Resource group where Azure Files will be deployed |
 | `GroupName` | ❌ No | `AzureFiles-Deployment-{RGName}` | Custom Azure AD group name |
 | `GroupDescription` | ❌ No | Auto-generated | Description for the group |
@@ -111,7 +112,16 @@ The account running this script needs:
     -IncludeNetworkPermissions:$false
 ```
 
-### Example 3: Test Mode
+### Example 3: Multi-Tenant Environment
+```powershell
+.\Create-AzureFilesDeploymentGroup.ps1 `
+    -SubscriptionId "12345678-1234-1234-1234-123456789012" `
+    -TenantId "87654321-4321-4321-4321-210987654321" `
+    -ResourceGroupName "rg-storage-customer-a" `
+    -GroupName "AzureFiles-CustomerA-Deployment"
+```
+
+### Example 4: Test Mode
 ```powershell
 .\Create-AzureFilesDeploymentGroup.ps1 `
     -SubscriptionId "12345678-1234-1234-1234-123456789012" `

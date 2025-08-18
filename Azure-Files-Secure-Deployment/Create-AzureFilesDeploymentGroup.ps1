@@ -13,6 +13,10 @@ param(
     [ValidatePattern("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")]
     [string]$SubscriptionId,
     
+    [Parameter(Mandatory = $false, HelpMessage = "Azure AD tenant ID (optional - will use current tenant if not specified)")]
+    [ValidatePattern("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")]
+    [string]$TenantId = "",
+    
     [Parameter(Mandatory = $true, HelpMessage = "Resource group name where Azure Files will be deployed")]
     [ValidateLength(1, 90)]
     [string]$ResourceGroupName,
@@ -99,6 +103,11 @@ Write-Host @"
 "@ -ForegroundColor Cyan
 
 Write-Host "Subscription: $SubscriptionId" -ForegroundColor Yellow
+if ($TenantId) {
+    Write-Host "Tenant ID: $TenantId" -ForegroundColor Yellow
+} else {
+    Write-Host "Tenant ID: (using current tenant)" -ForegroundColor Yellow
+}
 Write-Host "Resource Group: $ResourceGroupName" -ForegroundColor Yellow
 Write-Host "Group Name: $GroupName" -ForegroundColor Yellow
 Write-Host "Include Network Permissions: $IncludeNetworkPermissions" -ForegroundColor Yellow
@@ -124,15 +133,32 @@ function Connect-ToAzure {
         Write-Host "Connecting to Azure..." -ForegroundColor Yellow
         
         $Context = Get-AzContext
-        if (-not $Context -or $Context.Subscription.Id -ne $SubscriptionId) {
+        $NeedsConnection = $false
+        
+        if (-not $Context) {
+            $NeedsConnection = $true
+        } elseif ($Context.Subscription.Id -ne $SubscriptionId) {
+            $NeedsConnection = $true
+        } elseif ($TenantId -and $Context.Tenant.Id -ne $TenantId) {
+            $NeedsConnection = $true
+        }
+        
+        if ($NeedsConnection) {
             Write-Host "Please authenticate with an account that has:" -ForegroundColor Yellow
             Write-Host "  - User Administrator or Global Administrator (to create groups)" -ForegroundColor Gray
             Write-Host "  - Owner or User Access Administrator (to assign roles)" -ForegroundColor Gray
             
-            Connect-AzAccount -SubscriptionId $SubscriptionId
+            if ($TenantId) {
+                Write-Host "  - Connecting to tenant: $TenantId" -ForegroundColor Gray
+                Connect-AzAccount -SubscriptionId $SubscriptionId -TenantId $TenantId
+            } else {
+                Connect-AzAccount -SubscriptionId $SubscriptionId
+            }
         }
         
+        $Context = Get-AzContext
         Write-Host "✓ Connected to Azure subscription: $SubscriptionId" -ForegroundColor Green
+        Write-Host "  Tenant: $($Context.Tenant.Id)" -ForegroundColor Gray
         return $true
         
     } catch {
