@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Service Principal Security Executive Summary</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        .container {
+            background-color: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #1976d2 0%, #2196f3 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 8px 8px 0 0;
+            margin: -40px -40px 40px -40px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0 0 10px 0;
+            font-size: 32px;
+            font-weight: 300;
+        }
+        .header p {
+            margin: 0;
+            font-size: 18px;
+            opacity: 0.9;
+        }
+        .executive-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        .metric-card {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 25px;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid #dee2e6;
+            transition: transform 0.2s;
+        }
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .metric-number {
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        .metric-label {
+            font-size: 14px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .metric-critical { color: #d32f2f; }
+        .metric-warning { color: #ff9800; }
+        .metric-success { color: #4caf50; }
+        .metric-info { color: #1976d2; }
+        
+        .risk-overview {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin: 40px 0;
+        }
+        .risk-chart {
+            background-color: #f8f9fa;
+            padding: 25px;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+        .risk-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .risk-item:last-child {
+            border-bottom: none;
+        }
+        .risk-bar {
+            height: 20px;
+            border-radius: 10px;
+            margin: 0 15px;
+            flex-grow: 1;
+            position: relative;
+        }
+        .risk-bar-fill {
+            height: 100%;
+            border-radius: 10px;
+            position: absolute;
+            left: 0;
+            top: 0;
+        }
+        .trend-analysis {
+            background: linear-gradient(135deg, #e8f5e8 0%, #f1f8e9 100%);
+            padding: 25px;
+            border-radius: 8px;
+            margin: 30px 0;
+            border-left: 5px solid #4caf50;
+        }
+        .action-items {
+            background: linear-gradient(135deg, #fff3e0 0%, #fce4ec 100%);
+            padding: 25px;
+            border-radius: 8px;
+            margin: 30px 0;
+            border-left: 5px solid #ff9800;
+        }
+        .priority-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background-color: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .priority-table th {
+            background: linear-gradient(135deg, #37474f 0%, #455a64 100%);
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+        }
+        .priority-table td {
+            padding: 15px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .priority-table tr:hover {
+            background-color: #f5f5f5;
+        }
+        .priority-critical {
+            background-color: #ffebee;
+            border-left: 4px solid #d32f2f;
+        }
+        .priority-high {
+            background-color: #fff3e0;
+            border-left: 4px solid #ff9800;
+        }
+        .priority-medium {
+            background-color: #f3e5f5;
+            border-left: 4px solid #9c27b0;
+        }
+        .footer {
+            margin-top: 40px;
+            padding-top: 30px;
+            border-top: 2px solid #e0e0e0;
+            text-align: center;
+            color: #666;
+        }
+        .governance-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin: 40px 0;
+        }
+        .governance-card {
+            background-color: white;
+            padding: 25px;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .recommendation-list {
+            list-style: none;
+            padding: 0;
+        }
+        .recommendation-list li {
+            padding: 10px 0;
+            border-bottom: 1px solid #f0f0f0;
+            position: relative;
+            padding-left: 30px;
+        }
+        .recommendation-list li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #4caf50;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Service Principal Security Report</h1>
+            <p>Executive Summary - {{REPORT_DATE}}</p>
+        </div>
+
+        <div class="executive-summary">
+            <div class="metric-card">
+                <div class="metric-number metric-info">{{TOTAL_SERVICE_PRINCIPALS}}</div>
+                <div class="metric-label">Service Principals</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-number metric-info">{{TOTAL_CREDENTIALS}}</div>
+                <div class="metric-label">Total Credentials</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-number metric-critical">{{EXPIRED_CREDENTIALS}}</div>
+                <div class="metric-label">Expired</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-number metric-warning">{{EXPIRING_30_DAYS}}</div>
+                <div class="metric-label">Expiring (30 Days)</div>
+            </div>
+        </div>
+
+        <div class="risk-overview">
+            <div class="risk-chart">
+                <h3 style="margin-top: 0; color: #1976d2;">Risk Distribution</h3>
+                <div class="risk-item">
+                    <span>Critical Risk</span>
+                    <div class="risk-bar">
+                        <div class="risk-bar-fill" style="background-color: #d32f2f; width: {{CRITICAL_PERCENTAGE}}%"></div>
+                    </div>
+                    <span>{{CRITICAL_RISK_CREDENTIALS}}</span>
+                </div>
+                <div class="risk-item">
+                    <span>High Risk</span>
+                    <div class="risk-bar">
+                        <div class="risk-bar-fill" style="background-color: #ff9800; width: {{HIGH_PERCENTAGE}}%"></div>
+                    </div>
+                    <span>{{HIGH_RISK_CREDENTIALS}}</span>
+                </div>
+                <div class="risk-item">
+                    <span>Medium Risk</span>
+                    <div class="risk-bar">
+                        <div class="risk-bar-fill" style="background-color: #9c27b0; width: {{MEDIUM_PERCENTAGE}}%"></div>
+                    </div>
+                    <span>{{MEDIUM_RISK_CREDENTIALS}}</span>
+                </div>
+                <div class="risk-item">
+                    <span>Low Risk</span>
+                    <div class="risk-bar">
+                        <div class="risk-bar-fill" style="background-color: #4caf50; width: {{LOW_PERCENTAGE}}%"></div>
+                    </div>
+                    <span>{{LOW_RISK_CREDENTIALS}}</span>
+                </div>
+            </div>
+
+            <div class="risk-chart">
+                <h3 style="margin-top: 0; color: #1976d2;">Credential Types</h3>
+                <div class="risk-item">
+                    <span>Certificates</span>
+                    <div class="risk-bar">
+                        <div class="risk-bar-fill" style="background-color: #4caf50; width: {{CERTIFICATE_PERCENTAGE}}%"></div>
+                    </div>
+                    <span>{{CERTIFICATE_CREDENTIALS}}</span>
+                </div>
+                <div class="risk-item">
+                    <span>Secrets</span>
+                    <div class="risk-bar">
+                        <div class="risk-bar-fill" style="background-color: #ff9800; width: {{SECRET_PERCENTAGE}}%"></div>
+                    </div>
+                    <span>{{SECRET_CREDENTIALS}}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="action-items">
+            <h3 style="margin-top: 0; color: #e65100;">📋 Priority Action Items</h3>
+            <table class="priority-table">
+                <thead>
+                    <tr>
+                        <th>Priority</th>
+                        <th>Issue</th>
+                        <th>Count</th>
+                        <th>Recommended Action</th>
+                        <th>Timeline</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="priority-critical">
+                        <td><strong>Critical</strong></td>
+                        <td>Expired Credentials</td>
+                        <td>{{EXPIRED_CREDENTIALS}}</td>
+                        <td>Immediate review and renewal</td>
+                        <td>24 hours</td>
+                    </tr>
+                    <tr class="priority-high">
+                        <td><strong>High</strong></td>
+                        <td>Expiring in 7 Days</td>
+                        <td>{{EXPIRING_7_DAYS}}</td>
+                        <td>Schedule renewal</td>
+                        <td>This week</td>
+                    </tr>
+                    <tr class="priority-medium">
+                        <td><strong>Medium</strong></td>
+                        <td>Long-lived Secrets</td>
+                        <td>{{LONG_LIVED_SECRETS}}</td>
+                        <td>Implement rotation</td>
+                        <td>30 days</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="governance-section">
+            <div class="governance-card">
+                <h3 style="color: #1976d2;">🛡️ Security Posture</h3>
+                <ul class="recommendation-list">
+                    <li>{{SECURITY_SCORE}}% of credentials are properly managed</li>
+                    <li>{{CERTIFICATE_PERCENTAGE}}% use certificate-based authentication</li>
+                    <li>Average credential age: {{AVERAGE_CREDENTIAL_AGE}} days</li>
+                    <li>{{UNUSED_SP_COUNT}} unused Service Principals identified</li>
+                </ul>
+            </div>
+
+            <div class="governance-card">
+                <h3 style="color: #1976d2;">📊 Compliance Status</h3>
+                <ul class="recommendation-list">
+                    <li>Credential rotation policy: {{ROTATION_COMPLIANCE}}% compliant</li>
+                    <li>Certificate preference: {{CERTIFICATE_PREFERENCE}}% adoption</li>
+                    <li>Unused application cleanup: {{CLEANUP_OPPORTUNITY}} opportunities</li>
+                    <li>Security monitoring coverage: {{MONITORING_COVERAGE}}%</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="trend-analysis">
+            <h3 style="margin-top: 0; color: #2e7d32;">📈 Trend Analysis & Recommendations</h3>
+            <p><strong>Improvement Opportunities:</strong></p>
+            <ul>
+                <li><strong>Certificate Migration:</strong> {{SECRET_CREDENTIALS}} secrets could be migrated to certificate-based authentication for improved security</li>
+                <li><strong>Automated Rotation:</strong> Implement automated credential rotation for {{HIGH_RISK_CREDENTIALS}} high-risk credentials</li>
+                <li><strong>Application Cleanup:</strong> {{UNUSED_SP_COUNT}} unused Service Principals can be safely decommissioned</li>
+                <li><strong>Monitoring Enhancement:</strong> Enable sign-in monitoring for all Service Principals to track usage patterns</li>
+            </ul>
+        </div>
+
+        <div style="text-align: center; margin: 40px 0;">
+            <h3 style="color: #1976d2;">📎 Additional Resources</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0;">
+                <a href="{{DETAILED_REPORT_URL}}" style="display: block; background: linear-gradient(135deg, #1976d2 0%, #2196f3 100%); color: white; padding: 15px; text-decoration: none; border-radius: 6px; font-weight: 600;">Detailed Report</a>
+                <a href="{{AZURE_PORTAL_URL}}" style="display: block; background: linear-gradient(135deg, #388e3c 0%, #4caf50 100%); color: white; padding: 15px; text-decoration: none; border-radius: 6px; font-weight: 600;">Azure Portal</a>
+                <a href="{{SECURITY_DASHBOARD_URL}}" style="display: block; background: linear-gradient(135deg, #7b1fa2 0%, #9c27b0 100%); color: white; padding: 15px; text-decoration: none; border-radius: 6px; font-weight: 600;">Security Dashboard</a>
+            </div>
+        </div>
+
+        <div class="footer">
+            <h4>Key Performance Indicators</h4>
+            <p><strong>Overall Security Score:</strong> {{SECURITY_SCORE}}/100 | <strong>Risk Exposure:</strong> {{RISK_EXPOSURE}} | <strong>Compliance Rating:</strong> {{COMPLIANCE_RATING}}</p>
+            <p style="margin-top: 20px; font-size: 12px; color: #888;">
+                Report Generated: {{REPORT_TIMESTAMP}} | Tenant: {{TENANT_ID}}<br>
+                Next Scheduled Report: {{NEXT_REPORT_DATE}} | Monitoring Frequency: {{MONITORING_FREQUENCY}}
+            </p>
+            <p style="margin-top: 15px; font-size: 10px;">
+                🤖 Generated with <a href="https://claude.ai/code" style="color: #666;">Claude Code</a> Enterprise Security Automation
+            </p>
+        </div>
+    </div>
+</body>
+</html>
