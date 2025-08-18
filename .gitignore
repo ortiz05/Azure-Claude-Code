@@ -1,0 +1,79 @@
+# Azure Automation Scripts - Git Ignore File
+
+# Report outputs
+*/Reports/*.csv
+*/Reports/*.html
+*/Reports/*.json
+*/Reports/*.xml
+
+# Test outputs
+*/Tests/TestResults/
+*/Tests/*.log
+
+# Sensitive configuration files
+*.config
+*.secrets
+*credentials.json
+*appsettings.json
+
+# Azure specific
+*.pfx
+*.cer
+*.key
+*.pem
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Temporary files
+*.tmp
+*.temp
+~$*
+
+# Log files
+*.log
+logs/
+
+# PowerShell specific
+*.ps1xml
+Export/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS specific
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Python (if using Python scripts)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+
+# Documentation build outputs
+docs/_build/
+*.pdf
+
+# Archive files
+*.zip
+*.tar.gz
+*.rar
+
+# Cache directories
+.cache/
+cache/
+
+# User-specific files
+local.settings.json
+personal-notes.md
