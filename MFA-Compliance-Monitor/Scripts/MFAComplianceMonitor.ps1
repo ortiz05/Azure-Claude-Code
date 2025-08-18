@@ -771,11 +771,28 @@ try {
     }
     Write-Output "Successfully connected to tenant: $($Context.TenantId)"
     
-    # Validate permissions
+    # Validate permissions - FAIL FAST for security
     Write-Output "`n--- Validating Permissions ---"
     $PermissionsValid = Test-RequiredPermissions
     if (-not $PermissionsValid) {
-        Write-Warning "Some permissions are missing. Continuing but some features may not work..."
+        $RequiredPermissions = @("AuditLog.Read.All", "User.Read.All", "Mail.Send", "Directory.Read.All")
+        $ErrorMessage = @"
+CRITICAL ERROR: Missing required Microsoft Graph permissions.
+
+Required permissions:
+$(($RequiredPermissions | ForEach-Object { "  - $_" }) -join "`n")
+
+To fix this:
+1. Go to Azure Portal → App Registrations → [Your App]
+2. Navigate to API Permissions  
+3. Add the missing Microsoft Graph permissions (Application type)
+4. Click 'Grant admin consent'
+5. Re-run this script
+
+Cannot proceed safely without proper permissions.
+"@
+        Write-Error $ErrorMessage
+        throw "Missing required Microsoft Graph permissions. Cannot continue safely."
     }
     
     # Analyze sign-in logs for MFA compliance

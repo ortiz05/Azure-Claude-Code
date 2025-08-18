@@ -29,18 +29,25 @@ This repository contains production-ready Azure automation scripts that handle s
 - **Dependency Management**: Only trusted Microsoft modules used
 - **Version Control**: All changes tracked and reviewed
 - **Access Control**: Repository access limited to authorized personnel
+- **Automated Validation**: All scripts validated before commit with comprehensive checks
+- **Security Scanning**: Continuous security analysis for vulnerabilities and hardcoded credentials
 
 ## 🔍 Security Checklist
 
 Before deploying any automation to production:
 
 ### Pre-Deployment
+- [ ] **Run credential scan** - Execute `Scripts/Validate-PowerShellScripts.ps1` and ensure NO hardcoded credentials detected
+- [ ] **Run PowerShell validation script** - Execute `Scripts/Validate-PowerShellScripts.ps1` and ensure all checks pass
+- [ ] **Review PSScriptAnalyzer results** - Address all errors and critical warnings
+- [ ] **Validate syntax and parsing** - Ensure scripts can be parsed without errors
+- [ ] **Check error handling** - Verify comprehensive try-catch blocks and ErrorAction parameters
+- [ ] **Security scan results** - Confirm no hardcoded credentials or unsafe operations
 - [ ] Review all parameters and their validation
 - [ ] Verify permission requirements are minimal
 - [ ] Test in isolated development environment
 - [ ] Validate safety thresholds are appropriate
 - [ ] Confirm logging captures necessary audit information
-- [ ] Verify no credentials are hardcoded
 - [ ] Review exclusion lists for completeness
 
 ### During Deployment
@@ -118,6 +125,120 @@ AzureDiagnostics
 | where ResultDescription contains "Devices Processed"
 | extend ProcessedCount = extract(@"Devices Processed: (\d+)", 1, ResultDescription)
 | where toint(ProcessedCount) > 50  // Adjust threshold as needed
+```
+
+## ✅ PowerShell Validation Requirements
+
+### Mandatory Pre-Commit Validation
+
+All PowerShell scripts MUST pass comprehensive validation before being committed to the repository. This includes:
+
+#### 1. Syntax Validation
+- **PowerShell Parser**: Scripts must parse without syntax errors
+- **Token Analysis**: All tokens must be valid PowerShell constructs
+- **AST Validation**: Abstract Syntax Tree must be properly formed
+
+#### 2. PSScriptAnalyzer Compliance
+- **Zero Errors**: No PSScriptAnalyzer errors are permitted
+- **Critical Warnings**: All security and performance warnings must be addressed
+- **Best Practices**: Follow PowerShell community standards and Microsoft recommendations
+
+#### 3. Error Handling Standards
+- **Try-Catch Blocks**: Comprehensive error handling for all critical operations
+- **ErrorAction Parameters**: Explicit error handling strategy for all commands
+- **Write-Error Usage**: Proper error reporting without exposing sensitive information
+- **Dangerous Operations**: All potentially destructive commands must include `-WhatIf` support
+
+#### 4. Security Requirements
+- **ZERO Hardcoded Credentials**: Absolutely no Client IDs, Tenant IDs, secrets, or tokens in code
+- **Environment Variables**: Use `$env:AZURE_CLIENT_ID`, `$env:AZURE_TENANT_ID`, `$env:AZURE_CLIENT_SECRET` for testing
+- **SecureString Usage**: Sensitive data must use SecureString where applicable
+- **Parameter Validation**: All input parameters must include appropriate validation
+- **Confirmation for Dangerous Operations**: Destructive operations require explicit confirmation
+- **Pre-Commit Scanning**: All commits automatically scanned for credential patterns
+
+### Validation Script Usage
+
+Execute the validation script before any commit:
+
+```powershell
+# Run comprehensive validation
+.\Scripts\Validate-PowerShellScripts.ps1 -Path . -Detailed -ReportPath ".\validation-report.csv"
+
+# For specific projects only
+.\Scripts\Validate-PowerShellScripts.ps1 -Path ".\Device-Cleanup-Automation" -Detailed
+
+# Fail on warnings (strict mode)
+.\Scripts\Validate-PowerShellScripts.ps1 -Path . -FailOnWarnings
+```
+
+### Validation Report Analysis
+
+The validation script generates detailed reports including:
+
+1. **Syntax Validation Results**
+   - Parse errors and token issues
+   - AST structure validation
+   - File-level syntax scores
+
+2. **PSScriptAnalyzer Analysis**
+   - Error categorization by severity
+   - Rule-specific violations
+   - Best practice recommendations
+
+3. **Error Handling Assessment**
+   - Try-catch block coverage
+   - ErrorAction parameter usage
+   - Dangerous command safety analysis
+
+4. **Security Scan Results**
+   - Hardcoded credential detection
+   - Secure coding practice validation
+   - Input validation assessment
+
+### Continuous Integration Requirements
+
+For automated deployments, validation must be integrated into CI/CD pipelines:
+
+```yaml
+# Azure DevOps Pipeline Example
+- task: PowerShell@2
+  displayName: 'Validate PowerShell Scripts'
+  inputs:
+    targetType: 'filePath'
+    filePath: 'Scripts/Validate-PowerShellScripts.ps1'
+    arguments: '-Path $(Build.SourcesDirectory) -FailOnWarnings'
+    pwsh: true
+    
+- task: PublishTestResults@2
+  displayName: 'Publish Validation Results'
+  inputs:
+    testResultsFormat: 'JUnit'
+    testResultsFiles: 'validation-report.xml'
+```
+
+### Common Validation Issues and Resolutions
+
+| Issue Category | Common Problems | Resolution |
+|---------------|-----------------|------------|
+| **Syntax Errors** | Unmatched quotes, missing brackets | Use PowerShell ISE or VS Code with syntax highlighting |
+| **PSScriptAnalyzer** | Switch parameter defaults, plural nouns | Follow PowerShell naming conventions |
+| **Error Handling** | Missing try-catch, no ErrorAction | Implement comprehensive error handling |
+| **Security** | Hardcoded passwords, unsafe operations | Use secure credential management |
+
+### Validation Exemptions
+
+In rare cases where validation rules cannot be met:
+
+1. **Document the exception** with business justification
+2. **Implement compensating controls** for security issues
+3. **Add inline suppressions** for PSScriptAnalyzer with explanations
+4. **Review with security team** for any security-related exemptions
+
+```powershell
+# Example: Justified PSScriptAnalyzer suppression
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', '')]
+param([string]$TemporaryToken)  # Used only for non-sensitive API key
 ```
 
 ## 🔒 Data Governance

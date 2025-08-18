@@ -1,0 +1,181 @@
+name: PowerShell Script Validation
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths: ['**/*.ps1']
+  pull_request:
+    branches: [ main ]
+    paths: ['**/*.ps1']
+  workflow_dispatch:
+
+jobs:
+  validate-powershell:
+    name: Validate PowerShell Scripts
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup PowerShell
+      uses: azure/powershell@v1
+      with:
+        azPSVersion: 'latest'
+
+    - name: Install Required Modules
+      shell: pwsh
+      run: |
+        Write-Host "Installing required PowerShell modules..." -ForegroundColor Yellow
+        Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+        Install-Module Microsoft.Graph -Force -Scope CurrentUser -AllowClobber
+        Write-Host "✓ Modules installed successfully" -ForegroundColor Green
+
+    - name: Validate PowerShell Scripts
+      shell: pwsh
+      run: |
+        Write-Host "Starting PowerShell script validation..." -ForegroundColor Cyan
+        
+        # Make validation script executable and run it
+        $ValidationScript = "./Scripts/Validate-PowerShellScripts.ps1"
+        
+        if (Test-Path $ValidationScript) {
+          Write-Host "Running validation script: $ValidationScript" -ForegroundColor Yellow
+          
+          # Run validation with strict settings for CI/CD
+          & $ValidationScript -Path . -ReportPath "./validation-report.csv" -FailOnWarnings
+          
+          $ExitCode = $LASTEXITCODE
+          Write-Host "Validation completed with exit code: $ExitCode" -ForegroundColor $(if ($ExitCode -eq 0) { "Green" } else { "Red" })
+          
+          # Upload validation report as artifact
+          if (Test-Path "./validation-report.csv") {
+            Write-Host "✓ Validation report generated successfully" -ForegroundColor Green
+          }
+          
+          # Exit with the validation script's exit code
+          exit $ExitCode
+        } else {
+          Write-Host "❌ Validation script not found: $ValidationScript" -ForegroundColor Red
+          exit 1
+        }
+
+    - name: Upload Validation Report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: powershell-validation-report
+        path: validation-report.csv
+        retention-days: 30
+
+    - name: Post Validation Results
+      shell: pwsh
+      if: failure()
+      run: |
+        Write-Host "❌ PowerShell validation failed!" -ForegroundColor Red
+        Write-Host "Please review the validation report and fix all issues before merging." -ForegroundColor Yellow
+        Write-Host "" -ForegroundColor White
+        Write-Host "Common fixes:" -ForegroundColor Cyan
+        Write-Host "1. Address PSScriptAnalyzer warnings and errors" -ForegroundColor White
+        Write-Host "2. Add proper error handling (try-catch blocks)" -ForegroundColor White
+        Write-Host "3. Remove hardcoded credentials" -ForegroundColor White
+        Write-Host "4. Add parameter validation" -ForegroundColor White
+        Write-Host "5. Include -WhatIf support for destructive operations" -ForegroundColor White
+        
+        # Display last few lines of validation if report exists
+        if (Test-Path "./validation-report.csv") {
+          Write-Host "`nTop validation issues:" -ForegroundColor Cyan
+          $Report = Import-Csv "./validation-report.csv" | Where-Object { $_.Status -eq "Fail" -or $_.Status -eq "Error" } | Select-Object -First 10
+          $Report | ForEach-Object {
+            Write-Host "  ❌ $($_.ScriptName): $($_.TestType) - $($_.Message)" -ForegroundColor Red
+          }
+        }
+
+  security-scan:
+    name: Security Analysis
+    runs-on: ubuntu-latest
+    needs: validate-powershell
+    if: success()
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Run Security Scan
+      shell: pwsh
+      run: |
+        Write-Host "Running additional security analysis..." -ForegroundColor Cyan
+        
+        # Check for common security issues
+        $SecurityIssues = @()
+        
+        # Scan for potential credential patterns
+        $ScriptFiles = Get-ChildItem -Recurse -Include "*.ps1"
+        foreach ($File in $ScriptFiles) {
+          $Content = Get-Content $File.FullName -Raw
+          
+          # Check for potential issues
+          if ($Content -match '(?i)(password|secret|key|token)\s*=\s*["\'']\w+["\''']') {
+            $SecurityIssues += "Potential hardcoded credential in: $($File.Name)"
+          }
+          
+          if ($Content -match '(?i)(ConvertTo-SecureString.*-AsPlainText)') {
+            $SecurityIssues += "Plain text to SecureString conversion in: $($File.Name)"
+          }
+          
+          if ($Content -match '(?i)(Invoke-Expression|IEX)') {
+            $SecurityIssues += "Dynamic code execution detected in: $($File.Name)"
+          }
+        }
+        
+        if ($SecurityIssues.Count -gt 0) {
+          Write-Host "⚠️ Security concerns found:" -ForegroundColor Yellow
+          $SecurityIssues | ForEach-Object { Write-Host "  - $_" -ForegroundColor Yellow }
+          Write-Host "`nPlease review these items for security implications." -ForegroundColor Yellow
+        } else {
+          Write-Host "✅ No obvious security issues detected" -ForegroundColor Green
+        }
+
+  compliance-check:
+    name: Compliance Validation
+    runs-on: ubuntu-latest
+    needs: validate-powershell
+    if: success()
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Validate Compliance Requirements
+      shell: pwsh
+      run: |
+        Write-Host "Validating compliance requirements..." -ForegroundColor Cyan
+        
+        $ComplianceIssues = @()
+        $ScriptFiles = Get-ChildItem -Recurse -Include "*.ps1" | Where-Object { $_.Name -notlike "*Test*" -and $_.Name -notlike "*Validate*" }
+        
+        foreach ($File in $ScriptFiles) {
+          $Content = Get-Content $File.FullName -Raw
+          
+          # Check for required compliance elements
+          if ($Content -notmatch '(?i)#.*audit') {
+            $ComplianceIssues += "$($File.Name): Missing audit documentation"
+          }
+          
+          if ($Content -notmatch '(?i)WhatIf') {
+            $ComplianceIssues += "$($File.Name): Missing WhatIf support for testing"
+          }
+          
+          if ($Content -notmatch '(?i)(Write-Host|Write-Output).*log') {
+            $ComplianceIssues += "$($File.Name): Insufficient logging for audit trails"
+          }
+        }
+        
+        if ($ComplianceIssues.Count -gt 0) {
+          Write-Host "⚠️ Compliance recommendations:" -ForegroundColor Yellow
+          $ComplianceIssues | ForEach-Object { Write-Host "  - $_" -ForegroundColor Yellow }
+        } else {
+          Write-Host "✅ Compliance requirements validated" -ForegroundColor Green
+        }
