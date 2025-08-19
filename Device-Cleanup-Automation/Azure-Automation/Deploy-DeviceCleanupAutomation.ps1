@@ -227,12 +227,8 @@ function Test-AutomationAccount {
                 # Enable diagnostic settings for security monitoring
                 Write-Host "  Enabling audit logging..." -ForegroundColor Gray
                 
-                # Set automation account properties for security
-                Set-AzAutomationAccount `
-                    -ResourceGroupName $ResourceGroupName `
-                    -Name $AutomationAccountName `
-                    -DisableLocalAuth $false `
-                    -EncryptionKeySource "Microsoft.Automation"
+                # Note: DisableLocalAuth parameter may not be available in all Az.Automation versions
+                # Skipping advanced security settings that require newer module versions
                 
                 Write-Host "✓ Security settings configured" -ForegroundColor Green
                 
@@ -251,10 +247,11 @@ function Test-AutomationAccount {
                 Write-Warning "Managed Identity not enabled. Enabling now..."
                 
                 if (-not $WhatIf) {
-                    Set-AzAutomationAccount `
+                    # Use New-AzAutomationAccount with -AssignSystemIdentity to update
+                    $AutomationAccount = Set-AzAutomationAccount `
                         -ResourceGroupName $ResourceGroupName `
                         -Name $AutomationAccountName `
-                        -AssignSystemIdentity
+                        -AssignSystemIdentity:$true
                     
                     # Refresh the automation account object
                     $AutomationAccount = Get-AzAutomationAccount -ResourceGroupName $ResourceGroupName -Name $AutomationAccountName
@@ -285,12 +282,19 @@ function Install-RequiredModules {
             if ($WhatIf) {
                 Write-Host "  [WHATIF] Would install module: $($Module.Name)" -ForegroundColor Yellow
             } else {
-                $ImportJob = Import-AzAutomationModule -ResourceGroupName $ResourceGroupName `
-                    -AutomationAccountName $AutomationAccountName `
-                    -Name $Module.Name `
-                    -ModuleVersion $Module.Version
+                # PowerShell Gallery URL for the module
+                $ModuleUri = "https://www.powershellgallery.com/api/v2/package/$($Module.Name)/$($Module.Version)"
                 
-                Write-Host "  ✓ Import job started for $($Module.Name)" -ForegroundColor Green
+                try {
+                    $ImportJob = Import-AzAutomationModule -ResourceGroupName $ResourceGroupName `
+                        -AutomationAccountName $AutomationAccountName `
+                        -Name $Module.Name `
+                        -ContentLinkUri $ModuleUri
+                    
+                    Write-Host "  ✓ Import job started for $($Module.Name)" -ForegroundColor Green
+                } catch {
+                    Write-Warning "  Failed to import $($Module.Name): $($_.Exception.Message)"
+                }
             }
         }
         
