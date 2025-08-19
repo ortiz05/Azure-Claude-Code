@@ -25,12 +25,14 @@ This Azure infrastructure solution creates a centralized, secure, and cost-effec
    - Automatic deletion after retention period (default: 365 days)
    - Lifecycle management to minimize storage costs
 
-3. **Security Controls**
-   - HTTPS-only traffic enforcement
-   - TLS 1.2 minimum encryption
-   - Disabled public blob access
-   - Managed identity authentication
-   - RBAC-based access controls
+3. **Enterprise Security Controls**
+   - **Transport Security**: HTTPS-only traffic with TLS 1.2 minimum
+   - **Encryption**: Double encryption (infrastructure + service level)  
+   - **Access Control**: No public blob access, network access denied by default
+   - **Data Protection**: Blob versioning, change feed logging, soft delete policies
+   - **Network Security**: Cross-tenant replication disabled, NFS v3/SFTP disabled
+   - **Audit & Compliance**: Container metadata with security classifications
+   - **Authentication**: Managed identity and RBAC-based access controls
 
 4. **Enterprise Features**
    - Organized container structure for different services
