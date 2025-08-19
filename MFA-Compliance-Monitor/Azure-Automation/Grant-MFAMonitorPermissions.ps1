@@ -6,6 +6,11 @@
 # - User.Read.All: Read user information  
 # - Directory.Read.All: Read directory objects
 # - Mail.Send: Send compliance notifications
+#
+# MANDATORY 3-STEP WORKFLOW - This is Step 2 of 3:
+# Step 1: Create-MFAMonitorDeploymentGroup.ps1
+# Step 2: Grant-MFAMonitorPermissions.ps1 (THIS SCRIPT)
+# Step 3: Deploy-MFAComplianceMonitor.ps1
 
 #Requires -Version 7.0
 #Requires -Modules Microsoft.Graph.Authentication, Microsoft.Graph.Applications
@@ -15,6 +20,10 @@ param(
     [Parameter(Mandatory = $true, HelpMessage = "Object ID of the Managed Identity (from Automation Account → Identity)")]
     [ValidatePattern("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")]
     [string]$ManagedIdentityObjectId,
+    
+    [Parameter(Mandatory = $true, HelpMessage = "Azure AD Tenant ID (REQUIRED to avoid authentication issues)")]
+    [ValidatePattern("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")]
+    [string]$TenantId,
     
     [Parameter(Mandatory = $false, HelpMessage = "Name of the Managed Identity for display")]
     [string]$ManagedIdentityName = "MFAComplianceMonitor",
@@ -33,6 +42,7 @@ Microsoft Graph API Access Configuration
 "@ -ForegroundColor Cyan
 
 Write-Host "Managed Identity Object ID: $ManagedIdentityObjectId" -ForegroundColor Yellow
+Write-Host "Tenant ID: $TenantId" -ForegroundColor Yellow
 Write-Host "Display Name: $ManagedIdentityName" -ForegroundColor Yellow
 Write-Host "WhatIf Mode: $WhatIf" -ForegroundColor Yellow
 Write-Host "=========================================" -ForegroundColor Cyan
@@ -70,16 +80,23 @@ $RequiredPermissions = @(
 )
 
 function Connect-ToMicrosoftGraph {
+    param([string]$RequiredTenantId)
+    
     try {
         Write-Host "Connecting to Microsoft Graph..." -ForegroundColor Yellow
         Write-Host "You need Global Administrator or Privileged Role Administrator role" -ForegroundColor Yellow
         
-        # Connect with required scopes
-        Connect-MgGraph -Scopes "Application.Read.All", "AppRoleAssignment.ReadWrite.All", "Directory.ReadWrite.All" -NoWelcome
+        # Connect with required scopes and explicit tenant
+        Connect-MgGraph -Scopes "Application.Read.All", "AppRoleAssignment.ReadWrite.All", "Directory.ReadWrite.All" -TenantId $RequiredTenantId -NoWelcome
         
         $Context = Get-MgContext
         Write-Host "✓ Connected to tenant: $($Context.TenantId)" -ForegroundColor Green
         Write-Host "  Account: $($Context.Account)" -ForegroundColor Gray
+        
+        # Verify we're connected to the correct tenant
+        if ($Context.TenantId -ne $RequiredTenantId) {
+            throw "Connected to wrong tenant. Expected: $RequiredTenantId, Got: $($Context.TenantId)"
+        }
         
         return $true
         
@@ -247,8 +264,8 @@ function Show-PostGrantInstructions {
 
 # Main execution
 try {
-    # Step 1: Connect to Microsoft Graph
-    if (-not (Connect-ToMicrosoftGraph)) {
+    # Step 1: Connect to Microsoft Graph with explicit tenant
+    if (-not (Connect-ToMicrosoftGraph -RequiredTenantId $TenantId)) {
         throw "Failed to connect to Microsoft Graph"
     }
     

@@ -1,6 +1,11 @@
 # Deploy-MFAComplianceMonitor.ps1
 # Enhanced Azure Automation deployment script for MFA Compliance Monitor
 # Auto-creates infrastructure and embeds full script content
+#
+# MANDATORY 3-STEP WORKFLOW - This is Step 3 of 3:
+# Step 1: Create-MFAMonitorDeploymentGroup.ps1
+# Step 2: Grant-MFAMonitorPermissions.ps1 
+# Step 3: Deploy-MFAComplianceMonitor.ps1 (THIS SCRIPT)
 
 #Requires -Version 7.0
 #Requires -Modules Az.Accounts, Az.Automation, Az.Resources

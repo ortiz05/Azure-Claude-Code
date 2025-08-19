@@ -3,19 +3,24 @@
 # 
 # Purpose: Provision a dedicated group with least-privilege access for MFA monitoring
 # Scope: Microsoft Graph API permissions for compliance monitoring and reporting
+#
+# MANDATORY 3-STEP WORKFLOW - This is Step 1 of 3:
+# Step 1: Create-MFAMonitorDeploymentGroup.ps1 (THIS SCRIPT)
+# Step 2: Grant-MFAMonitorPermissions-Enhanced.ps1
+# Step 3: Deploy-MFAComplianceMonitor.ps1
 
 #Requires -Version 7.0
 #Requires -Modules Az.Accounts, Az.Resources
 
 [CmdletBinding()]
 param(
+    [Parameter(Mandatory = $true, HelpMessage = "Azure AD tenant ID (REQUIRED to avoid authentication issues)")]
+    [ValidatePattern("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")]
+    [string]$TenantId,
+    
     [Parameter(Mandatory = $true, HelpMessage = "Azure subscription ID where the automation will be deployed")]
     [ValidatePattern("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")]
     [string]$SubscriptionId,
-    
-    [Parameter(Mandatory = $true, HelpMessage = "Azure AD tenant ID")]
-    [ValidatePattern("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")]
-    [string]$TenantId,
     
     [Parameter(Mandatory = $true, HelpMessage = "Resource group name where Azure Automation will be deployed")]
     [ValidateLength(1, 90)]
