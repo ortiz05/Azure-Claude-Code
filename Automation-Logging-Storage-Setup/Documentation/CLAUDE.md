@@ -43,11 +43,11 @@ This Azure infrastructure solution creates a centralized, secure, and cost-effec
 ### Azure Resources Required
 - Azure Storage Account (StorageV2 with cool access tier)
 - Resource Group with proper RBAC permissions
-- Azure Automation Account with system-assigned managed identity
+- Service Principal with storage deployment permissions
 
 ### 🚀 CRITICAL: Azure Storage Deployment Workflow
 
-**MANDATORY 3-STEP DEPLOYMENT SEQUENCE** (Run manually by administrator):
+**SIMPLIFIED 2-STEP DEPLOYMENT SEQUENCE** (Infrastructure deployment only):
 
 #### Step 1: Create Deployment Group
 ```powershell
@@ -59,33 +59,23 @@ This Azure infrastructure solution creates a centralized, secure, and cost-effec
 ```
 **Purpose**: Creates security group with necessary Azure RBAC permissions on the resource group
 
-#### Step 2: Grant Storage Permissions to Managed Identity
-```powershell
-# Grants Azure Storage permissions to the Automation Account's managed identity
-./Automation-Logging-Storage-Setup/Azure-Automation/Grant-AutomationStoragePermissions.ps1 `
-    -ManagedIdentityObjectId "managed-identity-object-id" `
-    -TenantId "your-tenant-id" `
-    -SubscriptionId "your-subscription-id" `
-    -ResourceGroupName "your-resource-group"
-```
-**Purpose**: Assigns required Azure Storage permissions for automation logging operations
-
-#### Step 3: Deploy Storage Infrastructure
+#### Step 2: Deploy Storage Infrastructure
 ```powershell
 # Deploys the actual storage account with containers and lifecycle policies
 ./Automation-Logging-Storage-Setup/Azure-Automation/Deploy-AutomationLoggingStorageSetup.ps1 `
     -TenantId "your-tenant-id" `
     -SubscriptionId "your-subscription-id" `
-    -ResourceGroupName "your-resource-group" `
-    -AutomationManagedIdentityId "managed-identity-object-id"
+    -ResourceGroupName "your-resource-group"
 ```
 **Purpose**: Creates the storage infrastructure with all containers, policies, and configurations
+
+**Important**: Add your Service Principal to the deployment group created in Step 1 before running Step 2.
 
 #### ⚠️ Prerequisites Validation
 Before starting deployment:
 - [ ] Resource group exists in target subscription
 - [ ] User has Owner or Contributor permissions on the resource group
-- [ ] Azure Automation Account exists with system-assigned managed identity enabled
+- [ ] Service Principal credentials available for deployment
 - [ ] Tenant ID is available and validated
 - [ ] Storage account name is globally unique
 
