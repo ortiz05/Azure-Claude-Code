@@ -39,10 +39,49 @@ This Azure Automation solution automatically manages and cleans up inactive devi
 ## Technical Architecture
 
 ### Azure Resources Required
-- Azure Automation Account
-- Managed Identity or Service Principal
+- Azure Automation Account (with system-assigned managed identity enabled)
 - Azure Storage Account (for backups and reports)
 - Log Analytics Workspace (optional but recommended)
+
+### 🚀 CRITICAL: Azure Automation Deployment Workflow
+
+**MANDATORY 3-STEP DEPLOYMENT SEQUENCE** (Run manually by administrator):
+
+#### Step 1: Create Deployment Group
+```powershell
+# Creates Azure AD group and assigns RBAC permissions to resource group
+./Device-Cleanup-Automation/Azure-Automation/Create-DeviceCleanupDeploymentGroup.ps1 `
+    -TenantId "your-tenant-id" `
+    -ResourceGroupName "rg-automation"
+```
+**Purpose**: Creates security group with necessary Azure RBAC permissions on the resource group
+
+#### Step 2: Grant Graph Permissions to Managed Identity
+```powershell
+# Grants Microsoft Graph API permissions to the Automation Account's managed identity
+./Device-Cleanup-Automation/Azure-Automation/Grant-ManagedIdentityPermissions-Enhanced.ps1 `
+    -ManagedIdentityObjectId "managed-identity-object-id" `
+    -TenantId "your-tenant-id"
+```
+**Purpose**: Assigns required Microsoft Graph permissions for device management operations
+
+#### Step 3: Deploy Device Cleanup Automation
+```powershell
+# Deploys the runbook to existing Automation Account with proper configuration
+./Device-Cleanup-Automation/Azure-Automation/Deploy-DeviceCleanupAutomation.ps1 `
+    -AutomationAccountName "aa-automation" `
+    -ResourceGroupName "rg-automation" `
+    -SubscriptionId "your-subscription-id"
+```
+**Purpose**: Deploys the actual device cleanup runbook and configures weekly schedule
+
+#### ⚠️ Prerequisites Validation
+Before starting deployment:
+- [ ] Azure Automation Account exists in target resource group
+- [ ] System-assigned managed identity is enabled on Automation Account
+- [ ] User has Global Administrator or Privileged Role Administrator role
+- [ ] Tenant ID is available and validated
+- [ ] Resource group exists and is accessible
 
 ### Required Graph API Permissions
 | Permission | Type | Purpose |

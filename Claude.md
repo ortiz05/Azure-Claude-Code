@@ -218,17 +218,68 @@ do {
 | **Application Permission Auditor** | Application.Read.All, Directory.Read.All, DelegatedPermissionGrant.Read.All, AppRoleAssignment.Read.All, AuditLog.Read.All, Mail.Send | Permission governance |
 | **Azure Files Deployment** | Azure RBAC: Storage Account Contributor, Network Contributor, Key Vault Contributor | Infrastructure deployment |
 
+## 🚀 Azure Automation Deployment Workflow (CRITICAL)
+
+### ⚠️ MANDATORY 3-STEP DEPLOYMENT SEQUENCE
+**ALL Azure Automation deployments MUST follow this exact sequence:**
+
+#### Step 1: Create Deployment Group (MANUAL)
+```powershell
+# Run the Create-[Service]DeploymentGroup.ps1 script
+# This creates an Azure AD group with necessary RBAC permissions
+./[Service-Name]/Azure-Automation/Create-[Service]DeploymentGroup.ps1 `
+    -TenantId "your-tenant-id" `
+    -ResourceGroupName "rg-automation"
+```
+**Purpose**: Creates security group and assigns it to the resource group with required Azure RBAC roles
+
+#### Step 2: Grant Graph Permissions (MANUAL)
+```powershell
+# Run the Grant-ManagedIdentityPermissions script
+# This grants Microsoft Graph API permissions to the managed identity
+./[Service-Name]/Azure-Automation/Grant-ManagedIdentityPermissions.ps1 `
+    -AutomationAccountName "aa-automation" `
+    -ResourceGroupName "rg-automation" `
+    -TenantId "your-tenant-id"
+```
+**Purpose**: Assigns necessary Microsoft Graph permissions for the specific automation task
+
+#### Step 3: Deploy Automation (MANUAL)
+```powershell
+# Run the Deploy-[Service]Automation.ps1 script
+# This deploys the runbook to the existing Automation Account
+./[Service-Name]/Azure-Automation/Deploy-[Service]Automation.ps1 `
+    -AutomationAccountName "aa-automation" `
+    -ResourceGroupName "rg-automation" `
+    -SubscriptionId "your-subscription-id"
+```
+**Purpose**: Deploys the actual automation runbook and configures schedules
+
+### 📋 Pre-Deployment Checklist
+- [ ] Azure Automation Account exists in the target resource group
+- [ ] System-assigned managed identity is enabled on the Automation Account
+- [ ] User running scripts has Global Administrator or Privileged Role Administrator role
+- [ ] Tenant ID is available and validated
+- [ ] Resource group exists and is properly configured
+
+### ⚡ Key Workflow Principles
+1. **Sequential Execution**: Each step depends on the previous one completing successfully
+2. **Manual Execution**: All three steps are run manually by an administrator
+3. **Shared Infrastructure**: Multiple automations can share the same Automation Account
+4. **Least Privilege**: Each automation gets only the permissions it needs
+5. **Separation of Concerns**: Azure RBAC (Step 1) is separate from Graph permissions (Step 2)
+
 ## Azure Automation Deployment Matrix
 
-| Solution | Deployment Script | Schedule | Documentation |
-|----------|------------------|----------|---------------|
-| **Device Cleanup** | `Device-Cleanup-Automation/Azure-Automation/Deploy-DeviceCleanupAutomation.ps1` | Weekly at 03:00 UTC | Safety thresholds and lifecycle management |
-| **MFA Compliance** | `MFA-Compliance-Monitor/Azure-Automation/Deploy-MFAComplianceMonitor.ps1` | Daily at 07:00 UTC | Executive reporting and user notifications |
-| **App Usage Monitor** | `Enterprise-App-Usage-Monitor/Azure-Automation/Deploy-EnterpriseAppUsageMonitor.ps1` | Weekly at 04:00 UTC | Business impact and cost optimization |
-| **App Certificate Monitor** | `Enterprise-App-Certificate-Monitor/Azure-Automation/Deploy-EnterpriseAppCertificateMonitor.ps1` | Daily at 05:00 UTC | Critical security alerting |
-| **Service Principal Manager** | `Service-Principal-Credential-Manager/Azure-Automation/Deploy-ServicePrincipalCredentialManager.ps1` | Daily at 06:00 UTC | Automated credential remediation |
-| **Application Permission Auditor** | `Application-Permission-Auditor/Azure-Automation/Deploy-ApplicationPermissionAuditor.ps1` | Weekly at 08:00 UTC | OAuth consent governance |
-| **Azure Files Deployment** | `Azure-Files-Secure-Deployment/Deployment/Deploy-SecureAzureFiles.ps1` | On-demand (Infrastructure-as-Code) | Secure infrastructure deployment |
+| Solution | Deployment Script | Schedule | Required Graph Permissions |
+|----------|------------------|----------|----------------------------|
+| **Device Cleanup** | `Device-Cleanup-Automation/Azure-Automation/Deploy-DeviceCleanupAutomation.ps1` | Weekly at 03:00 UTC | Device.ReadWrite.All, Directory.ReadWrite.All, Mail.Send |
+| **MFA Compliance** | `MFA-Compliance-Monitor/Azure-Automation/Deploy-MFAComplianceMonitor.ps1` | Daily at 07:00 UTC | AuditLog.Read.All, User.Read.All, Mail.Send |
+| **App Usage Monitor** | `Enterprise-App-Usage-Monitor/Azure-Automation/Deploy-EnterpriseAppUsageMonitor.ps1` | Weekly at 04:00 UTC | Application.Read.All, AuditLog.Read.All, Mail.Send |
+| **App Certificate Monitor** | `Enterprise-App-Certificate-Monitor/Azure-Automation/Deploy-EnterpriseAppCertificateMonitor.ps1` | Daily at 05:00 UTC | Application.Read.All, Directory.Read.All, Mail.Send |
+| **Service Principal Manager** | `Service-Principal-Credential-Manager/Azure-Automation/Deploy-ServicePrincipalCredentialManager.ps1` | Daily at 06:00 UTC | Application.ReadWrite.All, Directory.Read.All, Mail.Send |
+| **Application Permission Auditor** | `Application-Permission-Auditor/Azure-Automation/Deploy-ApplicationPermissionAuditor.ps1` | Weekly at 08:00 UTC | Application.Read.All, DelegatedPermissionGrant.Read.All, Mail.Send |
+| **Azure Files Deployment** | `Azure-Files-Secure-Deployment/Deployment/Deploy-SecureAzureFiles.ps1` | On-demand (Infrastructure-as-Code) | N/A - Azure RBAC only |
 
 ## Infrastructure Deployment Patterns (Azure Files Model)
 
@@ -369,12 +420,18 @@ Infrastructure-Solution/           # Infrastructure Deployments (Azure Files mod
 ## Future Development Guidelines
 
 ### For AI Agents Creating New Automations
+- **Understand the 3-step workflow**: ALWAYS create scripts for all three deployment steps
 - **Start with security**: Implement permission validation before business logic
 - **Follow established patterns**: Use existing authentication and reporting frameworks
+- **Create all deployment scripts**:
+  1. `Create-[Service]DeploymentGroup.ps1` - For Azure RBAC setup
+  2. `Grant-ManagedIdentityPermissions.ps1` or service-specific variant - For Graph API permissions
+  3. `Deploy-[Service]Automation.ps1` - For runbook deployment
 - **Comprehensive documentation**: Update all required documentation locations
 - **Test thoroughly**: Validate permission failures and error handling
 - **Maintain consistency**: Follow scheduling patterns to prevent conflicts
 - **Create service-specific Claude.md**: MANDATORY for any new automation service
+- **Document the workflow**: Clearly explain the 3-step deployment process in README
 
 ### For AI Agents Working on Existing Automations
 - **Read service Claude.md first**: Always start by reading `/Service-Name/Documentation/CLAUDE.md` to understand the specific service context
