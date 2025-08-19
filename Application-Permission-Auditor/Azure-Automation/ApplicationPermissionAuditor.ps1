@@ -1,6 +1,10 @@
 # ApplicationPermissionAuditor.ps1
 # Enterprise Application Permission Audit and Compliance Automation
 # Scans and analyzes Microsoft Graph API permissions across all Enterprise Applications
+#
+# New Feature: Custom Graph Application Support
+# Use -GraphClientId parameter to specify a custom Azure AD application for Graph authentication
+# when the default Microsoft Graph PowerShell app is disabled in enterprise environments
 
 [CmdletBinding()]
 param(
@@ -12,6 +16,9 @@ param(
     
     [Parameter(Mandatory = $false)]
     [string]$ClientSecret = $env:AZURE_CLIENT_SECRET,
+    
+    [Parameter(Mandatory = $false)]
+    [string]$GraphClientId,
     
     [Parameter(Mandatory = $false)]
     [string[]]$ExcludeApplications = @(),
@@ -213,7 +220,14 @@ function Connect-ToMicrosoftGraph {
         if ($UseManagedIdentity -or $StorageAccountName) {
             # Use Managed Identity for authentication (required for blob storage)
             Write-Host "Connecting with Azure Automation Managed Identity..." -ForegroundColor Yellow
-            Connect-MgGraph -Identity -NoWelcome
+            
+            # Use custom Graph application if specified
+            if ($GraphClientId) {
+                Write-Host "Using custom Graph application: $GraphClientId" -ForegroundColor Yellow
+                Connect-MgGraph -Identity -ClientId $GraphClientId -NoWelcome
+            } else {
+                Connect-MgGraph -Identity -NoWelcome
+            }
             
             # Also connect to Azure for storage operations if needed
             if ($StorageAccountName) {
@@ -226,9 +240,22 @@ function Connect-ToMicrosoftGraph {
             # This is a standard Microsoft Graph authentication pattern
             $SecureSecret = ConvertTo-SecureString $ClientSecret -AsPlainText -Force  # nosemgrep
             $ClientCredential = New-Object System.Management.Automation.PSCredential($ClientId, $SecureSecret)
-            Connect-MgGraph -TenantId $TenantId -ClientSecretCredential $ClientCredential -NoWelcome
+            
+            # Use custom Graph application if specified, otherwise use the service principal credentials
+            if ($GraphClientId) {
+                Write-Host "Using custom Graph application: $GraphClientId" -ForegroundColor Yellow
+                Connect-MgGraph -ClientId $GraphClientId -TenantId $TenantId -ClientSecretCredential $ClientCredential -NoWelcome
+            } else {
+                Connect-MgGraph -TenantId $TenantId -ClientSecretCredential $ClientCredential -NoWelcome
+            }
         } else {
-            Connect-MgGraph -TenantId $TenantId -NoWelcome
+            # Interactive authentication with custom Graph application if specified
+            if ($GraphClientId) {
+                Write-Host "Using custom Graph application: $GraphClientId" -ForegroundColor Yellow
+                Connect-MgGraph -ClientId $GraphClientId -TenantId $TenantId -NoWelcome
+            } else {
+                Connect-MgGraph -TenantId $TenantId -NoWelcome
+            }
         }
         
         $Context = Get-MgContext
