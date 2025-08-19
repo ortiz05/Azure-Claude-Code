@@ -83,6 +83,28 @@ Before starting deployment:
 - [ ] Tenant ID is available and validated
 - [ ] Resource group exists and is accessible
 
+#### ✅ Successful Deployment Record
+
+**Latest Deployment (August 2025)**:
+- **Automation Account**: `test-device-cleanup-auto` 
+- **Resource Group**: `test-rg`
+- **Tenant**: `87db06e7-f38e-4c01-b926-8291bfae4996`
+- **Principal ID**: `05b343ce-4a8e-47f4-bb2e-c46a1c47f18c`
+- **Status**: ✅ Fully operational with weekly schedule
+
+**Deployment Results**:
+- ✅ Runbook published successfully (`DeviceCleanupAutomation`)
+- ✅ Schedule created and linked (`DeviceCleanupAutomation-Weekly`)
+- ✅ PowerShell modules installed (Microsoft.Graph.* v2.15.0)
+- ✅ Test execution initiated (WhatIf mode)
+- ✅ Authentication validated (service principal + managed identity)
+
+**Configuration Applied**:
+- **Schedule**: Weekly execution at 2:00 AM UTC
+- **Safety Limits**: 90 days inactive, 10% max delete, 100 absolute max
+- **Authentication**: System-assigned managed identity
+- **Modules**: All required Graph modules successfully installed
+
 ### Required Graph API Permissions
 | Permission | Type | Purpose |
 |------------|------|---------|
