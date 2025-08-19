@@ -206,9 +206,13 @@ function New-AzureFilesDeploymentGroup {
         }
         
         # Create new security group
+        # Generate mail nickname from group name (remove spaces and special chars, max 64 chars)
+        $MailNickname = ($GroupName -replace '[^a-zA-Z0-9]', '').Substring(0, [Math]::Min(64, ($GroupName -replace '[^a-zA-Z0-9]', '').Length))
+        
         $Group = New-AzADGroup `
             -DisplayName $GroupName `
             -Description $GroupDescription `
+            -MailNickname $MailNickname `
             -SecurityEnabled `
             -MailEnabled:$false
         
