@@ -128,7 +128,7 @@ $RequiredPermissions = @(
     "Application.Read.All",
     "Directory.Read.All", 
     "DelegatedPermissionGrant.Read.All",
-    "AppRoleAssignment.Read.All",
+    "AppRoleAssignment.ReadWrite.All",
     "AuditLog.Read.All",
     "Mail.Send"
 )

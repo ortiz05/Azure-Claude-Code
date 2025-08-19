@@ -173,7 +173,7 @@ function Test-SpecificPermissions {
         $PermissionTests = @{
             "Application.Read.All" = { Test-ApplicationPermissionAccess }
             "DelegatedPermissionGrant.Read.All" = { Test-DelegatedPermissionGrantAccess }
-            "AppRoleAssignment.Read.All" = { Test-AppRoleAssignmentAccess }
+            "AppRoleAssignment.ReadWrite.All" = { Test-AppRoleAssignmentAccess }
             "AuditLog.Read.All" = { Test-AuditLogAccess }
             "Mail.Send" = { Test-MailSendPermission }
         }
@@ -307,7 +307,7 @@ try {
         "Application.Read.All",
         "Directory.Read.All",
         "DelegatedPermissionGrant.Read.All",
-        "AppRoleAssignment.Read.All",
+        "AppRoleAssignment.ReadWrite.All",
         "AuditLog.Read.All",
         "Mail.Send"
     )
@@ -347,7 +347,7 @@ try {
             Write-Host "  - Admin consent not granted" -ForegroundColor Gray
             Write-Host "  - Service Principal not configured correctly" -ForegroundColor Gray
             Write-Host "  - DelegatedPermissionGrant.Read.All permission missing" -ForegroundColor Gray
-            Write-Host "  - AppRoleAssignment.Read.All permission missing" -ForegroundColor Gray
+            Write-Host "  - AppRoleAssignment.ReadWrite.All permission missing" -ForegroundColor Gray
         }
         
     } else {
@@ -356,7 +356,7 @@ try {
         Write-Host "  1. Verify tenant ID, client ID, and client secret" -ForegroundColor Gray
         Write-Host "  2. Check Azure app registration configuration" -ForegroundColor Gray
         Write-Host "  3. Ensure required permissions are granted with admin consent" -ForegroundColor Gray
-        Write-Host "  4. Verify DelegatedPermissionGrant.Read.All and AppRoleAssignment.Read.All permissions" -ForegroundColor Gray
+        Write-Host "  4. Verify DelegatedPermissionGrant.Read.All and AppRoleAssignment.ReadWrite.All permissions" -ForegroundColor Gray
     }
     
 } catch {

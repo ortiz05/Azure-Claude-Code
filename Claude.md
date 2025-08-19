@@ -120,7 +120,7 @@ Each automation service writes to its own dedicated container:
 | **App Usage Monitor** | Application.Read.All, AuditLog.Read.All, Directory.Read.All, Mail.Send | Application usage analysis |
 | **App Certificate Monitor** | Application.Read.All, AuditLog.Read.All, Directory.Read.All, Mail.Send | Certificate lifecycle monitoring |
 | **Service Principal Manager** | Application.Read.All, Application.ReadWrite.All, Directory.Read.All, AuditLog.Read.All, Mail.Send | Credential lifecycle management |
-| **Application Permission Auditor** | Application.Read.All, Directory.Read.All, DelegatedPermissionGrant.Read.All, AppRoleAssignment.Read.All, AuditLog.Read.All, Mail.Send | Permission governance |
+| **Application Permission Auditor** | Application.Read.All, Directory.Read.All, DelegatedPermissionGrant.Read.All, AppRoleAssignment.ReadWrite.All, AuditLog.Read.All, Mail.Send | Permission governance |
 | **Azure Files Deployment** | Azure RBAC: Storage Account Contributor, Network Contributor, Key Vault Contributor | Infrastructure deployment |
 
 ### Key Workflow Principles

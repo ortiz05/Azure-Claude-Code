@@ -41,7 +41,7 @@ This automation requires the following Microsoft Graph API permissions:
 - **Application.Read.All**: Read Enterprise Application and Service Principal objects
 - **Directory.Read.All**: Access directory information for comprehensive analysis
 - **DelegatedPermissionGrant.Read.All**: Read OAuth2 permission grants (delegated permissions)
-- **AppRoleAssignment.Read.All**: Read application role assignments (application permissions)
+- **AppRoleAssignment.ReadWrite.All**: Read application role assignments (application permissions)
 - **AuditLog.Read.All**: Analyze sign-in patterns to determine application usage
 - **Mail.Send**: Send security alerts and governance reports
 

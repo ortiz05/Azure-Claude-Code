@@ -63,7 +63,7 @@ Application-Permission-Auditor/
    - Application.Read.All (required)
    - Directory.Read.All (required)
    - DelegatedPermissionGrant.Read.All (required - OAuth consent analysis)
-   - AppRoleAssignment.Read.All (required - application permission analysis)
+   - AppRoleAssignment.ReadWrite.All (required - application permission analysis)
    - AuditLog.Read.All (for usage analysis)
    - Mail.Send (for notifications)
 
@@ -236,7 +236,7 @@ Include OAuth Consents: True
 Validating Microsoft Graph permissions...
   ✓ Granted: Application.Read.All
   ✓ Granted: DelegatedPermissionGrant.Read.All
-  ✓ Granted: AppRoleAssignment.Read.All
+  ✓ Granted: AppRoleAssignment.ReadWrite.All
   ✓ Granted: AuditLog.Read.All
 ✓ All required permissions validated
 
@@ -272,7 +272,7 @@ Analyzing permission risk levels...
 | Permission denied errors | Verify Graph API permissions and admin consent |
 | No applications found | Check Application.Read.All permission |
 | OAuth consent analysis fails | Verify DelegatedPermissionGrant.Read.All permission |
-| App role assignment errors | Check AppRoleAssignment.Read.All permission |
+| App role assignment errors | Check AppRoleAssignment.ReadWrite.All permission |
 | Usage analysis fails | Verify AuditLog.Read.All permission and data availability |
 | Missing critical permissions in results | Review high-risk permission configuration |
 
