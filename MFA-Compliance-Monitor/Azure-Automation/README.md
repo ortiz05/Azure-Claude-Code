@@ -9,6 +9,7 @@ Deploy and configure the MFA Compliance Monitor for Azure Automation with manage
     -SubscriptionId "your-subscription-id" `
     -ResourceGroupName "your-resource-group" `
     -AutomationAccountName "your-automation-account" `
+    -StorageAccountName "your-storage-account" `
     -DaysToAnalyze 30 `
     -ITAdminEmails @("admin@company.com")
 ```
@@ -19,6 +20,9 @@ Deploy and configure the MFA Compliance Monitor for Azure Automation with manage
 - **ITAdminEmails**: Admin notification email addresses
 - **ExcludeUsers**: Users to exclude from compliance monitoring
 - **StartTime**: Daily execution time (default: 07:00:00)
+- **StorageAccountName**: Azure Storage account for report archival
+- **StorageContainerName**: Container name (default: "mfa-compliance-reports")
+- **UseManagedIdentity**: Use managed identity for authentication (default: true)
 
 ## 🔐 Required Permissions
 

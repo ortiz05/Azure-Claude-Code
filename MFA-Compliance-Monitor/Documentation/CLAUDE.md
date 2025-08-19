@@ -132,6 +132,19 @@ The automation should follow this analysis workflow:
    - User processing issues
    - System errors and resolutions
 
+### Azure Blob Storage Integration (NEW)
+**Centralized Report Management:**
+- **Container**: `mfa-compliance-reports` (dedicated container for MFA compliance)
+- **Organization**: Reports stored in `yyyy/MM/` folder structure for audit compliance
+- **Cost Optimization**: Cool tier storage for long-term retention
+- **Security**: Managed identity authentication with no hardcoded credentials
+- **Parameters**:
+  - `StorageAccountName`: Azure Storage account for report archival
+  - `StorageContainerName`: Default "mfa-compliance-reports"
+  - `UseManagedIdentity`: Default true for secure authentication
+- **Compliance Benefits**: Centralized audit trail for regulatory requirements
+- **Backward Compatibility**: Local exports continue when storage not configured
+
 ### 5. Security and Compliance Controls
 **Authentication Security:**
 - Use managed identity for production deployments

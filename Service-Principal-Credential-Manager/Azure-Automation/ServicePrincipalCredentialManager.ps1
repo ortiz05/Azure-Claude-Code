@@ -67,6 +67,56 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Export-ToBlob {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$LocalFilePath,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$StorageAccountName,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$ContainerName,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$BlobName
+    )
+    
+    try {
+        if (-not (Test-Path $LocalFilePath)) {
+            Write-Warning "Local file not found: $LocalFilePath"
+            return $false
+        }
+        
+        $CurrentDate = Get-Date
+        $YearMonth = $CurrentDate.ToString("yyyy/MM")
+        
+        if (-not $BlobName) {
+            $FileName = Split-Path $LocalFilePath -Leaf
+            $BlobName = "$YearMonth/$FileName"
+        }
+        
+        $StorageContext = New-AzStorageContext -StorageAccountName $StorageAccountName -UseConnectedAccount
+        
+        $BlobParams = @{
+            File = $LocalFilePath
+            Container = $ContainerName
+            Blob = $BlobName
+            Context = $StorageContext
+            StandardBlobTier = 'Cool'
+            Force = $true
+        }
+        
+        $Blob = Set-AzStorageBlobContent @BlobParams
+        Write-Host "Successfully uploaded to blob: $($Blob.Name)" -ForegroundColor Green
+        return $true
+    }
+    catch {
+        Write-Warning "Failed to upload to blob storage: $_"
+        return $false
+    }
+}
+
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host "Service Principal Credential Manager" -ForegroundColor Cyan
 Write-Host "Enterprise Security Automation" -ForegroundColor Cyan
@@ -143,14 +193,37 @@ function Connect-ToMicrosoftGraph {
     try {
         Write-Host "Connecting to Microsoft Graph..." -ForegroundColor Yellow
         
-        if ($ClientId -and $TenantId -and $ClientSecret) {
-            # PSScriptAnalyzer: ConvertTo-SecureString with -AsPlainText is required for authentication
-            # This is a standard Microsoft Graph authentication pattern
-            $SecureSecret = ConvertTo-SecureString $ClientSecret -AsPlainText -Force  # nosemgrep
+        if ($UseManagedIdentity) {
+            try {
+                Connect-MgGraph -Identity -NoWelcome
+                Write-Host "✓ Connected using Managed Identity" -ForegroundColor Green
+            }
+            catch {
+                Write-Warning "Managed Identity connection failed, falling back to other methods..."
+                if ($ClientId -and $TenantId -and $ClientSecret) {
+                    $SecureSecret = ConvertTo-SecureString $ClientSecret -AsPlainText -Force
+                    $ClientCredential = New-Object System.Management.Automation.PSCredential($ClientId, $SecureSecret)
+                    Connect-MgGraph -TenantId $TenantId -ClientSecretCredential $ClientCredential -NoWelcome
+                } else {
+                    Connect-MgGraph -TenantId $TenantId -NoWelcome
+                }
+            }
+        } elseif ($ClientId -and $TenantId -and $ClientSecret) {
+            $SecureSecret = ConvertTo-SecureString $ClientSecret -AsPlainText -Force
             $ClientCredential = New-Object System.Management.Automation.PSCredential($ClientId, $SecureSecret)
             Connect-MgGraph -TenantId $TenantId -ClientSecretCredential $ClientCredential -NoWelcome
         } else {
             Connect-MgGraph -TenantId $TenantId -NoWelcome
+        }
+        
+        if ($StorageAccountName -and $UseManagedIdentity) {
+            try {
+                Connect-AzAccount -Identity -Force | Out-Null
+                Write-Host "✓ Connected to Azure Storage using Managed Identity" -ForegroundColor Green
+            }
+            catch {
+                Write-Warning "Failed to connect to Azure for storage operations: $_"
+            }
         }
         
         $Context = Get-MgContext
@@ -398,6 +471,10 @@ function Export-CredentialReports {
         $DetailedReportPath = Join-Path $ReportPath "ServicePrincipal-Credentials-Detailed-$Timestamp.csv"
         $CredentialData | Export-Csv -Path $DetailedReportPath -NoTypeInformation
         
+        if ($StorageAccountName) {
+            Export-ToBlob -LocalFilePath $DetailedReportPath -StorageAccountName $StorageAccountName -ContainerName $StorageContainerName
+        }
+        
         $SummaryData = $CredentialData | Group-Object ServicePrincipalName | ForEach-Object {
             $Credentials = $_.Group
             $CriticalCredentials = @($Credentials | Where-Object { $_.RiskLevel -eq "Critical" })
@@ -428,6 +505,10 @@ function Export-CredentialReports {
         $SummaryReportPath = Join-Path $ReportPath "ServicePrincipal-Summary-$Timestamp.csv"
         $SummaryData | Export-Csv -Path $SummaryReportPath -NoTypeInformation
         
+        if ($StorageAccountName) {
+            Export-ToBlob -LocalFilePath $SummaryReportPath -StorageAccountName $StorageAccountName -ContainerName $StorageContainerName
+        }
+        
         $ExecutiveSummaryData = @{
             TotalServicePrincipals = ($CredentialData | Select-Object -ExpandProperty ServicePrincipalName -Unique).Count
             TotalCredentials = $CredentialData.Count
@@ -446,6 +527,10 @@ function Export-CredentialReports {
         
         $ExecutiveSummaryPath = Join-Path $ReportPath "ServicePrincipal-Executive-Summary-$Timestamp.json"
         $ExecutiveSummaryData | ConvertTo-Json -Depth 3 | Out-File -FilePath $ExecutiveSummaryPath
+        
+        if ($StorageAccountName) {
+            Export-ToBlob -LocalFilePath $ExecutiveSummaryPath -StorageAccountName $StorageAccountName -ContainerName $StorageContainerName
+        }
         
         Write-Host "✓ Reports generated successfully:" -ForegroundColor Green
         Write-Host "  Detailed Report: $DetailedReportPath" -ForegroundColor Gray
@@ -507,6 +592,10 @@ function Invoke-AutomatedRemediation {
         
         $RemediationReportPath = Join-Path $ReportPath "Remediation-Actions-$(Get-Date -Format 'yyyy-MM-dd_HH-mm-ss').csv"
         $RemediationActions | Export-Csv -Path $RemediationReportPath -NoTypeInformation
+        
+        if ($StorageAccountName) {
+            Export-ToBlob -LocalFilePath $RemediationReportPath -StorageAccountName $StorageAccountName -ContainerName $StorageContainerName
+        }
         
         Write-Host "✓ Remediation completed - $($RemediationActions.Count) actions taken" -ForegroundColor Green
         Write-Host "  Report: $RemediationReportPath" -ForegroundColor Gray

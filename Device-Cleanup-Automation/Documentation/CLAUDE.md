@@ -178,6 +178,20 @@ Generate comprehensive reports including:
 - Success/failure statistics
 - Graphs and visualizations where applicable
 
+### 7. Azure Blob Storage Integration (NEW)
+**Centralized Device Management Reporting:**
+- **Container**: `device-cleanup-reports` (dedicated container for device lifecycle management)
+- **Organization**: Reports stored in `yyyy/MM/` folder structure for device compliance
+- **Cost Optimization**: Cool tier storage for long-term device audit retention
+- **Security**: Managed identity authentication with zero credential exposure
+- **Parameters**:
+  - `StorageAccountName`: Azure Storage account for device management archival
+  - `StorageContainerName`: Default "device-cleanup-reports"
+  - `UseManagedIdentity`: Default true for secure, passwordless authentication
+- **Compliance Benefits**: Complete device lifecycle audit trail for regulatory requirements
+- **Integration**: Reports available for IT asset management and compliance systems
+- **Backward Compatibility**: Local exports continue when storage not configured
+
 ## Operational Procedures
 
 ### Initial Deployment

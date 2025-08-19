@@ -173,6 +173,20 @@ foreach ($Grant in $OAuth2Grants) {
 - **Application Summary Report**: Per-application permission assessment with recommended actions
 - **Compliance Audit Trail**: Evidence for SOC2/SOX compliance and governance requirements
 
+### Azure Blob Storage Integration (NEW)
+**Centralized Security Reporting:**
+- **Container**: `permission-audit-reports` (dedicated container for permission audits)
+- **Organization**: Reports stored in `yyyy/MM/` folder structure for compliance archival
+- **Cost Optimization**: Cool tier storage for long-term security audit retention
+- **Security**: Managed identity authentication with zero hardcoded credentials
+- **Parameters**:
+  - `StorageAccountName`: Azure Storage account for security report archival
+  - `StorageContainerName`: Default "permission-audit-reports"
+  - `UseManagedIdentity`: Default true for secure, passwordless authentication
+- **Compliance Benefits**: Centralized audit trail for regulatory security requirements
+- **SIEM Integration**: Stored reports can be ingested by security monitoring systems
+- **Backward Compatibility**: Local exports continue when storage not configured
+
 ## Integration Patterns
 
 ### Security Information and Event Management (SIEM)

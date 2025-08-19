@@ -9,6 +9,7 @@ Deploy and configure the Device Cleanup Automation for Azure Automation with man
     -SubscriptionId "your-subscription-id" `
     -ResourceGroupName "your-resource-group" `
     -AutomationAccountName "your-automation-account" `
+    -StorageAccountName "your-storage-account" `
     -InactiveDays 90 `
     -MaxDeletePercentage 10 `
     -AdminEmails @("admin@company.com")
@@ -20,6 +21,9 @@ Deploy and configure the Device Cleanup Automation for Azure Automation with man
 - **MaxDeletePercentage**: Safety limit as percentage (default: 10%)
 - **MaxDeleteAbsolute**: Maximum devices to delete (default: 100)
 - **CleanupType**: "All", "RegisteredOnly", or "AutopilotOnly"
+- **StorageAccountName**: Azure Storage account for report archival
+- **StorageContainerName**: Container name (default: "device-cleanup-reports")
+- **UseManagedIdentity**: Use managed identity for authentication (default: true)
 
 ## 🔐 Required Permissions
 

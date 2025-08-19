@@ -261,6 +261,34 @@ All scripts now include comprehensive compatibility validation:
 - Blocks execution on Windows PowerShell (Desktop edition)
 - Provides clear error messages and installation guidance
 
+## 📦 Azure Blob Storage Integration (New!)
+
+All Azure Automation runbooks now support direct integration with Azure Blob Storage for centralized report management and compliance archiving.
+
+### Storage Configuration
+Each automation service writes to its own dedicated container:
+- **Device Cleanup**: `device-cleanup-reports`
+- **MFA Compliance**: `mfa-compliance-reports`
+- **Certificate Monitor**: `certificate-reports`
+- **App Usage Monitor**: `app-usage-reports`
+- **Permission Auditor**: `permission-audit-reports`
+- **Service Principal Manager**: `service-principal-reports`
+
+### Features
+- **Managed Identity Authentication**: Secure, passwordless access to storage
+- **Cool Tier Storage**: Automatic cost optimization for archived reports
+- **Year/Month Organization**: Reports organized in `yyyy/MM/` folder structure
+- **Backward Compatibility**: Scripts continue to write locally when storage not configured
+
+### Usage Example
+```powershell
+# Run with blob storage integration
+.\DeviceCleanupAutomation.ps1 `
+    -StorageAccountName "stgautomationreports" `
+    -StorageContainerName "device-cleanup-reports" `
+    -UseManagedIdentity
+```
+
 ## 🔐 Authentication & Security
 
 ### Production Authentication (Recommended)
@@ -268,6 +296,8 @@ All scripts now include comprehensive compatibility validation:
 ```powershell
 # Automated authentication in Azure Automation runbooks
 Connect-MgGraph -Identity -NoWelcome
+# For storage operations
+Connect-AzAccount -Identity
 ```
 
 ### Development/Testing Authentication

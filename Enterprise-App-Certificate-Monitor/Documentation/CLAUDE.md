@@ -135,6 +135,20 @@ function Test-RequiredPermissions {
 - **Compliance status** - Certificate lifecycle compliance metrics
 - **Operational metrics** - Success rates and remediation effectiveness
 
+### Azure Blob Storage Integration (NEW)
+**Centralized Certificate Monitoring:**
+- **Container**: `certificate-reports` (dedicated container for certificate monitoring)
+- **Organization**: Reports stored in `yyyy/MM/` folder structure for certificate compliance
+- **Cost Optimization**: Cool tier storage for long-term certificate audit retention
+- **Security**: Managed identity authentication with no credential exposure
+- **Parameters**:
+  - `StorageAccountName`: Azure Storage account for certificate report archival
+  - `StorageContainerName`: Default "certificate-reports"
+  - `UseManagedIdentity`: Default true for secure authentication
+- **Compliance Benefits**: Long-term certificate lifecycle audit trail
+- **Integration**: Reports available for security monitoring and compliance systems
+- **Backward Compatibility**: Local exports continue when storage not configured
+
 ## Certificate Management Integration
 
 ### Azure Key Vault Integration

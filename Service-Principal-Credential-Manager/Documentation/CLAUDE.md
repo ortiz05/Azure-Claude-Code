@@ -152,6 +152,18 @@ $Credential.RiskLevel = if ($Credential.IsExpired -and $IsUnused) { "Critical" }
 - **Service Principal Summary**: Per-application risk assessment with recommended actions
 - **Remediation Activity Log**: Audit trail of all automated and manual actions
 
+### Azure Blob Storage Integration (NEW)
+- **Centralized Report Archival**: All reports automatically uploaded to Azure Blob Storage
+- **Container**: `service-principal-reports` (dedicated container for this service)
+- **Organization**: Reports stored in `yyyy/MM/` folder structure for compliance
+- **Cost Optimization**: Cool tier storage for archived reports
+- **Security**: Managed identity authentication, no credentials in code
+- **Parameters**:
+  - `StorageAccountName`: Azure Storage account for report archival
+  - `StorageContainerName`: Default "service-principal-reports"
+  - `UseManagedIdentity`: Default true for passwordless authentication
+- **Backward Compatibility**: Scripts continue writing locally when storage not configured
+
 ## Integration Patterns
 
 ### DevOps Integration

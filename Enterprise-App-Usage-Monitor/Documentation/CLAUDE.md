@@ -173,6 +173,20 @@ function Test-RequiredPermissions {
 - **Compliance Enhancement** - Simplified compliance through reduced application scope
 - **Resource Optimization** - Infrastructure and storage efficiency improvements
 
+### Azure Blob Storage Integration (NEW)
+**Centralized Business Intelligence:**
+- **Container**: `app-usage-reports` (dedicated container for application usage analytics)
+- **Organization**: Reports stored in `yyyy/MM/` folder structure for business intelligence
+- **Cost Optimization**: Cool tier storage for long-term business analytics retention
+- **Security**: Managed identity authentication with no credential management overhead
+- **Parameters**:
+  - `StorageAccountName`: Azure Storage account for business intelligence archival
+  - `StorageContainerName`: Default "app-usage-reports"
+  - `UseManagedIdentity`: Default true for secure, automated authentication
+- **Business Benefits**: Historical trending analysis for strategic decision making
+- **Integration**: Reports available for BI tools and executive dashboard systems
+- **Backward Compatibility**: Local exports continue when storage not configured
+
 ## Risk Assessment Framework
 
 ### Business Continuity Risk Analysis
