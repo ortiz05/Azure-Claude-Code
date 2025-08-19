@@ -3,12 +3,42 @@
     Test Microsoft Graph connection and account type
 .DESCRIPTION
     Quick diagnostic script to identify MSA vs organizational account issues
+.PARAMETER TenantId
+    Azure AD Tenant ID (optional but recommended to avoid authentication issues)
 #>
+
+param(
+    [Parameter(Mandatory = $false)]
+    [string]$TenantId
+)
 
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host "Microsoft Graph Connection Diagnostic" -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host ""
+
+# Prompt for Tenant ID if not provided
+if (-not $TenantId) {
+    Write-Host "⚠ Tenant ID not provided. This may cause authentication issues." -ForegroundColor Yellow
+    Write-Host "  To find your Tenant ID:" -ForegroundColor Gray
+    Write-Host "  1. Go to Azure Portal > Azure Active Directory" -ForegroundColor Gray
+    Write-Host "  2. Look for 'Tenant ID' in the Overview page" -ForegroundColor Gray
+    Write-Host ""
+    $inputTenantId = Read-Host "Enter your Tenant ID (or press Enter to continue without it)"
+    if ($inputTenantId) {
+        $TenantId = $inputTenantId
+    }
+}
+
+if ($TenantId) {
+    # Validate Tenant ID format
+    if ($TenantId -notmatch '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$') {
+        Write-Host "✗ Invalid Tenant ID format. Expected format: 12345678-1234-1234-1234-123456789012" -ForegroundColor Red
+        exit 1
+    }
+    Write-Host "✓ Using Tenant ID: $TenantId" -ForegroundColor Green
+    Write-Host ""
+}
 
 # Check Azure connection
 Write-Host "1. Checking Azure connection..." -ForegroundColor Yellow
@@ -59,8 +89,13 @@ foreach ($module in $graphModules) {
 Write-Host ""
 Write-Host "3. Testing Microsoft Graph connection..." -ForegroundColor Yellow
 try {
-    # Try to connect with minimal scope
-    Connect-MgGraph -Scopes "User.Read" -NoWelcome -ErrorAction Stop
+    # Try to connect with minimal scope and tenant if provided
+    if ($TenantId) {
+        Connect-MgGraph -Scopes "User.Read" -TenantId $TenantId -NoWelcome -ErrorAction Stop
+    }
+    else {
+        Connect-MgGraph -Scopes "User.Read" -NoWelcome -ErrorAction Stop
+    }
     $mgContext = Get-MgContext
     
     if ($mgContext) {

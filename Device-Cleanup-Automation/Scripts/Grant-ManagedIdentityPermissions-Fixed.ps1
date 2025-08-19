@@ -12,6 +12,8 @@
     Azure Subscription ID (optional, will use current context if not provided)
 .PARAMETER UseAlternativeAuth
     Use alternative authentication method for MSA accounts
+.PARAMETER TenantId
+    Azure AD Tenant ID (required to avoid authentication issues)
 #>
 
 [CmdletBinding()]
@@ -21,6 +23,9 @@ param(
     
     [Parameter(Mandatory = $true)]
     [string]$ResourceGroupName,
+    
+    [Parameter(Mandatory = $true)]
+    [string]$TenantId,
     
     [Parameter(Mandatory = $false)]
     [string]$SubscriptionId,
@@ -90,6 +95,11 @@ function Test-RequiredModules {
 
 # Test Azure connection with better error handling
 function Test-AzureConnection {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RequiredTenantId
+    )
+    
     try {
         Write-Info "Testing Azure connection..."
         $context = Get-AzContext
@@ -97,14 +107,27 @@ function Test-AzureConnection {
         if (-not $context) {
             Write-Warning "Not connected to Azure. Attempting to connect..."
             
-            # Try interactive login first
+            # Try interactive login with specific tenant
             try {
-                Connect-AzAccount -ErrorAction Stop
+                Connect-AzAccount -TenantId $RequiredTenantId -ErrorAction Stop
                 $context = Get-AzContext
             }
             catch {
                 Write-Error "Failed to connect to Azure: $_"
                 Write-Info "Please ensure you're using an organizational account (not personal MSA)"
+                return $null
+            }
+        }
+        
+        # Verify we're connected to the right tenant
+        if ($context.Tenant.Id -ne $RequiredTenantId) {
+            Write-Warning "Connected to wrong tenant. Switching to tenant: $RequiredTenantId"
+            try {
+                Set-AzContext -TenantId $RequiredTenantId -ErrorAction Stop
+                $context = Get-AzContext
+            }
+            catch {
+                Write-Error "Failed to switch to tenant $RequiredTenantId : $_"
                 return $null
             }
         }
@@ -120,11 +143,11 @@ function Test-AzureConnection {
             Write-Warning "This script requires an organizational Azure AD account."
             Write-Info "Please sign in with your work or school account (e.g., admin@company.onmicrosoft.com)"
             
-            # Offer to reconnect
+            # Offer to reconnect with the specified tenant
             $reconnect = Read-Host "Would you like to sign out and reconnect with a different account? (Y/N)"
             if ($reconnect -eq 'Y') {
                 Disconnect-AzAccount
-                Connect-AzAccount -TenantId $context.Tenant.Id
+                Connect-AzAccount -TenantId $RequiredTenantId
                 $context = Get-AzContext
             }
         }
@@ -220,10 +243,15 @@ try {
         throw "Required modules are not installed"
     }
     
-    # Test Azure connection
-    $azContext = Test-AzureConnection
+    # Validate Tenant ID format
+    if ($TenantId -notmatch '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$') {
+        throw "Invalid Tenant ID format. Please provide a valid GUID (e.g., 12345678-1234-1234-1234-123456789012)"
+    }
+    
+    # Test Azure connection with specified tenant
+    $azContext = Test-AzureConnection -RequiredTenantId $TenantId
     if (-not $azContext) {
-        throw "Failed to establish Azure connection"
+        throw "Failed to establish Azure connection to tenant: $TenantId"
     }
     
     # Set subscription if provided
@@ -255,8 +283,8 @@ try {
     try {
         Write-Info "Connecting to Microsoft Graph..."
         
-        # Use device code authentication for better compatibility
-        Connect-MgGraph -Scopes "Application.ReadWrite.All", "Directory.ReadWrite.All", "AppRoleAssignment.ReadWrite.All" -TenantId $azContext.Tenant.Id -NoWelcome
+        # Use device code authentication for better compatibility with explicit tenant
+        Connect-MgGraph -Scopes "Application.ReadWrite.All", "Directory.ReadWrite.All", "AppRoleAssignment.ReadWrite.All" -TenantId $TenantId -NoWelcome
         
         Write-Success "Connected to Microsoft Graph"
         
@@ -326,8 +354,8 @@ try {
         if ($_.Exception.Message -match "MSA accounts" -or $UseAlternativeAuth) {
             Write-Info "Attempting alternative authentication method..."
             
-            # Try Azure CLI method
-            $success = Grant-PermissionsViaCLI -ManagedIdentityId $principalId -TenantId $azContext.Tenant.Id
+            # Try Azure CLI method with specified tenant
+            $success = Grant-PermissionsViaCLI -ManagedIdentityId $principalId -TenantId $TenantId
             
             if (-not $success) {
                 Write-Error "Alternative method also failed"
