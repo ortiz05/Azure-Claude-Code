@@ -228,7 +228,7 @@ do {
 | **App Certificate Monitor** | `Enterprise-App-Certificate-Monitor/Azure-Automation/Deploy-EnterpriseAppCertificateMonitor.ps1` | Daily at 05:00 UTC | Critical security alerting |
 | **Service Principal Manager** | `Service-Principal-Credential-Manager/Azure-Automation/Deploy-ServicePrincipalCredentialManager.ps1` | Daily at 06:00 UTC | Automated credential remediation |
 | **Application Permission Auditor** | `Application-Permission-Auditor/Azure-Automation/Deploy-ApplicationPermissionAuditor.ps1` | Weekly at 08:00 UTC | OAuth consent governance |
-| **Azure Files Deployment** | Manual deployment only (Infrastructure-as-Code) | On-demand | Secure infrastructure deployment |
+| **Azure Files Deployment** | `Azure-Files-Secure-Deployment/Deployment/Deploy-SecureAzureFiles.ps1` | On-demand (Infrastructure-as-Code) | Secure infrastructure deployment |
 
 ## Infrastructure Deployment Patterns (Azure Files Model)
 
@@ -310,29 +310,43 @@ if ($VirtualNetworkName -or $AllowedIPRanges.Count -gt 0) {
 
 ### Standard Solution Architecture
 ```
-Solution-Name/
+Solution-Name/                     # Automation Services
 ├── Documentation/
-│   └── CLAUDE.md                    # AI-readable implementation guidelines
+│   └── CLAUDE.md                   # AI-readable implementation guidelines
 ├── Scripts/
-│   └── MainScript.ps1              # Primary automation logic
-├── Azure-Automation/
-│   ├── Deploy-SolutionName.ps1    # Azure Automation deployment
-│   └── README.md                   # Deployment documentation
+│   └── MainScript.ps1             # Primary automation logic
+├── Azure-Automation/              # All deployment scripts consolidated here
+│   ├── Deploy-SolutionName.ps1   # Main Azure Automation deployment
+│   ├── Create-[Service]DeploymentGroup.ps1  # Group creation with permissions
+│   ├── Grant-[Service]Permissions.ps1       # Graph API permission grants
+│   └── README.md                  # Deployment documentation
 ├── Tests/
-│   └── Test-Connection.ps1         # Connection and permission testing
-├── Templates/                      # Optional: External templates if not embedded in scripts
-│   ├── UserNotification.html      # Use only if templates are external
-│   └── AdminSummary.html
-└── Reports/                        # CSV output directory (gitignored)
+│   └── Test-Connection.ps1        # Connection and permission testing
+└── Reports/                       # CSV output directory (gitignored)
+
+Infrastructure-Solution/           # Infrastructure Deployments (Azure Files model)
+├── Documentation/
+│   └── CLAUDE.md                  # AI-readable implementation guidelines
+├── Deployment/                    # All deployment scripts consolidated here
+│   ├── Deploy-Solution.ps1       # Main infrastructure deployment
+│   ├── Create-[Service]DeploymentGroup.ps1  # Group creation with permissions
+│   ├── Validate-Deployment.ps1   # Post-deployment validation
+│   └── README.md                  # Deployment documentation
+├── Examples/
+│   ├── Basic-Deployment.ps1      # Example configurations
+│   └── Enterprise-Deployment.ps1
+└── Tests/
+    └── Test-Connection.ps1        # Connection and validation testing
 ```
 
 ### Mandatory Components for New Solutions
 1. **Main automation script** with fail-fast permission validation
-2. **Azure Automation deployment script** (if applicable)
-3. **Deployment README** with quick start guide
-4. **Permission documentation** with specific requirements
-5. **Email templates** embedded in PowerShell scripts (preferred) or external Templates folder
-6. **Security validation** using established patterns
+2. **Azure Automation deployment script** (in Azure-Automation/ folder)
+3. **Deployment group creation script** (Create-[Service]DeploymentGroup.ps1)
+4. **Permission grant script** (Grant-[Service]Permissions.ps1)
+5. **Deployment README** with quick start guide in Azure-Automation/ or Deployment/ folder
+6. **Service-specific CLAUDE.md** in Documentation/ folder
+7. **Security validation** using established patterns
 
 ## Production Deployment Checklist
 

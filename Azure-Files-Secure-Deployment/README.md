@@ -9,7 +9,7 @@ Use your Global Admin account with OAuth authentication (browser prompt):
 
 ```powershell
 # No setup required - just run the deployment script
-.\Deploy-SecureAzureFiles.ps1 `
+.\Deployment\Deploy-SecureAzureFiles.ps1 `
     -SubscriptionId "your-subscription-id" `
     -TenantId "your-tenant-id" `
     -ResourceGroupName "rg-secure-files" `
@@ -22,7 +22,7 @@ Use your Global Admin account with OAuth authentication (browser prompt):
 
 First, create a Service Principal:
 ```powershell
-.\Onboard-AzureFiles-ServicePrincipal.ps1 `
+.\Deployment\Onboard-AzureFiles-ServicePrincipal.ps1 `
     -TenantId "your-tenant-id" `
     -SubscriptionId "your-subscription-id"
 ```
@@ -90,7 +90,7 @@ Then use the generated deployment script with Service Principal authentication.
 
 ### Basic Secure Deployment
 ```powershell
-.\Deploy-SecureAzureFiles.ps1 `
+.\Deployment\Deploy-SecureAzureFiles.ps1 `
     -SubscriptionId "12345678-1234-1234-1234-123456789012" `
     -TenantId "11111111-1111-1111-1111-111111111111" `
     -ResourceGroupName "rg-files-prod" `
@@ -100,7 +100,7 @@ Then use the generated deployment script with Service Principal authentication.
 
 ### VNet-Integrated Deployment
 ```powershell
-.\Deploy-SecureAzureFiles.ps1 `
+.\Deployment\Deploy-SecureAzureFiles.ps1 `
     -SubscriptionId "12345678-1234-1234-1234-123456789012" `
     -TenantId "11111111-1111-1111-1111-111111111111" `
     -ResourceGroupName "rg-files-prod" `
@@ -113,7 +113,7 @@ Then use the generated deployment script with Service Principal authentication.
 
 ### Premium Storage with Customer-Managed Encryption
 ```powershell
-.\Deploy-SecureAzureFiles.ps1 `
+.\Deployment\Deploy-SecureAzureFiles.ps1 `
     -SubscriptionId "12345678-1234-1234-1234-123456789012" `
     -TenantId "11111111-1111-1111-1111-111111111111" `
     -ResourceGroupName "rg-files-prod" `
@@ -126,7 +126,7 @@ Then use the generated deployment script with Service Principal authentication.
 
 ### IP-Restricted Deployment
 ```powershell
-.\Deploy-SecureAzureFiles.ps1 `
+.\Deployment\Deploy-SecureAzureFiles.ps1 `
     -SubscriptionId "12345678-1234-1234-1234-123456789012" `
     -TenantId "11111111-1111-1111-1111-111111111111" `
     -ResourceGroupName "rg-files-prod" `
@@ -137,7 +137,7 @@ Then use the generated deployment script with Service Principal authentication.
 
 ### WhatIf Mode (Testing)
 ```powershell
-.\Deploy-SecureAzureFiles.ps1 `
+.\Deployment\Deploy-SecureAzureFiles.ps1 `
     -SubscriptionId "12345678-1234-1234-1234-123456789012" `
     -TenantId "11111111-1111-1111-1111-111111111111" `
     -ResourceGroupName "rg-files-test" `

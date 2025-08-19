@@ -32,7 +32,7 @@
 ## Key Scripts & Functions
 
 ### Main Deployment Script
-**File**: `Deploy-SecureAzureFiles.ps1`
+**File**: `Deployment/Deploy-SecureAzureFiles.ps1`
 **Purpose**: Primary deployment automation with comprehensive security validation
 
 **Critical Parameters** (All Required):
@@ -49,7 +49,7 @@ Connect-AzAccount -SubscriptionId $SubscriptionId -TenantId $TenantId
 ```
 
 ### Least-Privilege Group Provisioning
-**File**: `Create-AzureFilesDeploymentGroup.ps1`
+**File**: `Deployment/Create-AzureFilesDeploymentGroup.ps1`
 **Purpose**: Creates Azure AD security group with minimal required permissions
 
 **Security Benefits**:
@@ -63,14 +63,14 @@ Connect-AzAccount -SubscriptionId $SubscriptionId -TenantId $TenantId
 - `Network Contributor` - Configure VNet service endpoints (optional)
 
 ### Service Principal Automation
-**File**: `Onboard-AzureFiles-ServicePrincipal.ps1`
+**File**: `Deployment/Onboard-AzureFiles-ServicePrincipal.ps1`
 **Purpose**: Creates service principal for unattended deployment scenarios
 
 **When to Use**: ONLY for automated deployment (CI/CD pipelines, API calls)
 **When NOT to Use**: Manual deployment (use OAuth authentication instead)
 
 ### Validation & Security Scanning
-**File**: `Validate-AzureFilesDeployment.ps1`
+**File**: `Deployment/Validate-AzureFilesDeployment.ps1`
 **Purpose**: Post-deployment security assessment and compliance validation
 
 ## Authentication Approaches
@@ -78,14 +78,14 @@ Connect-AzAccount -SubscriptionId $SubscriptionId -TenantId $TenantId
 ### Recommended: Manual Deployment with OAuth
 ```powershell
 # For human operators - browser authentication prompt
-.\Deploy-SecureAzureFiles.ps1 -SubscriptionId "xxx" -TenantId "xxx" -ResourceGroupName "xxx" -StorageAccountName "xxx" -Location "xxx"
+.\Deployment\Deploy-SecureAzureFiles.ps1 -SubscriptionId "xxx" -TenantId "xxx" -ResourceGroupName "xxx" -StorageAccountName "xxx" -Location "xxx"
 ```
 
 ### Automation: Service Principal with Certificate
 ```powershell
 # For CI/CD and unattended scenarios only
 # First create service principal:
-.\Onboard-AzureFiles-ServicePrincipal.ps1 -TenantId "xxx" -SubscriptionId "xxx"
+.\Deployment\Onboard-AzureFiles-ServicePrincipal.ps1 -TenantId "xxx" -SubscriptionId "xxx"
 # Then use generated deployment script
 ```
 

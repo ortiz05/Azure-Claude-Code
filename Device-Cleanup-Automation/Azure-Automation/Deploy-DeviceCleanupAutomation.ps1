@@ -310,6 +310,24 @@ function Install-RequiredModules {
 }
 
 function Create-RunbookContent {
+    # Read the actual Device Cleanup script content
+    $ScriptPath = Join-Path $PSScriptRoot ".." "Scripts" "DeviceCleanupAutomation.ps1"
+    
+    if (-not (Test-Path $ScriptPath)) {
+        Write-Error "Device Cleanup script not found at: $ScriptPath"
+        throw "Cannot find source script for runbook deployment"
+    }
+    
+    Write-Host "Reading Device Cleanup script from: $ScriptPath" -ForegroundColor Gray
+    $OriginalScript = Get-Content -Path $ScriptPath -Raw
+    
+    # Remove any authentication logic that won't work in Azure Automation
+    # The script should use Connect-MgGraph -Identity for managed identity
+    $OriginalScript = $OriginalScript -replace 'Connect-MgGraph.*-ClientId.*', 'Connect-MgGraph -Identity -NoWelcome'
+    $OriginalScript = $OriginalScript -replace 'Connect-MgGraph.*-TenantId.*', 'Connect-MgGraph -Identity -NoWelcome'
+    
+    # The runbook needs the full script content, but with some modifications for Azure Automation
+    # We'll prepend Azure Automation specific parameters and connection logic
     $RunbookContent = @"
 # Device Cleanup Automation - Azure Automation Runbook
 # This runbook performs automated cleanup of inactive devices in Entra ID

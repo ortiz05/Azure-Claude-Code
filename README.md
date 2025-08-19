@@ -28,41 +28,71 @@ Azure-Claude-Code/
 │   ├── Test-GraphAuthentication.ps1           # Authentication testing
 │   └── Validate-PowerShellScripts.ps1         # Script validation utility
 ├── Azure-Files-Secure-Deployment/             # 🆕 Secure file storage solution
-│   ├── Deploy-SecureAzureFiles.ps1           # Main deployment script
-│   ├── Validate-AzureFilesDeployment.ps1     # Security validation
-│   ├── Create-AzureFilesDeploymentGroup.ps1   # Least-privilege group setup
-│   ├── Onboard-AzureFiles-ServicePrincipal.ps1 # Service principal automation
+│   ├── Deployment/                           # All deployment scripts consolidated
+│   │   ├── Deploy-SecureAzureFiles.ps1      # Main deployment script
+│   │   ├── Validate-AzureFilesDeployment.ps1 # Security validation
+│   │   ├── Create-AzureFilesDeploymentGroup.ps1 # Least-privilege group setup
+│   │   ├── Onboard-AzureFiles-ServicePrincipal.ps1 # Service principal automation
+│   │   └── README.md                         # Deployment guide
+│   ├── Documentation/CLAUDE.md               # AI implementation guidelines
 │   ├── HowTo-Mount-FileShare-Intune.md       # Intune configuration guide
 │   ├── GROUP-SETUP-README.md                 # Group management documentation
 │   ├── ONBOARDING-INSTRUCTIONS.md            # Complete setup guide
 │   └── Examples/                              # Deployment examples
 ├── Application-Permission-Auditor/             # 🆕 Critical security automation
-│   ├── Azure-Automation/                     # Azure Automation deployment
+│   ├── Azure-Automation/                     # All deployment scripts consolidated
+│   │   ├── Deploy-ApplicationPermissionAuditor.ps1
+│   │   ├── Create-[Service]DeploymentGroup.ps1
+│   │   ├── Grant-[Service]Permissions.ps1
+│   │   └── README.md
 │   ├── Scripts/ApplicationPermissionAuditor.ps1
-│   ├── Templates/                             # Email notification templates
+│   ├── Documentation/CLAUDE.md
 │   └── Tests/
 ├── Service-Principal-Credential-Manager/       # 🆕 Credential lifecycle automation
-│   ├── Azure-Automation/                     # Azure Automation deployment
+│   ├── Azure-Automation/                     # All deployment scripts consolidated
+│   │   ├── Deploy-ServicePrincipalCredentialManager.ps1
+│   │   ├── Create-[Service]DeploymentGroup.ps1
+│   │   ├── Grant-[Service]Permissions.ps1
+│   │   └── README.md
 │   ├── Scripts/ServicePrincipalCredentialManager.ps1
-│   ├── Templates/                             # Alert and report templates
+│   ├── Documentation/CLAUDE.md
 │   └── Tests/
 ├── Device-Cleanup-Automation/                  # Device lifecycle management
-│   ├── Azure-Automation/                     # Azure Automation deployment
+│   ├── Azure-Automation/                     # All deployment scripts consolidated
+│   │   ├── Deploy-DeviceCleanupAutomation.ps1
+│   │   ├── Create-DeviceCleanupDeploymentGroup.ps1
+│   │   ├── Grant-ManagedIdentityPermissions.ps1
+│   │   └── README.md
 │   ├── Scripts/DeviceCleanupAutomation.ps1
+│   ├── Documentation/CLAUDE.md
 │   ├── Tests/
 │   └── Reports/
 ├── Enterprise-App-Certificate-Monitor/         # Certificate monitoring
-│   ├── Azure-Automation/                     # Azure Automation deployment
+│   ├── Azure-Automation/                     # All deployment scripts consolidated
+│   │   ├── Deploy-EnterpriseAppCertificateMonitor.ps1
+│   │   ├── Create-[Service]DeploymentGroup.ps1
+│   │   ├── Grant-[Service]Permissions.ps1
+│   │   └── README.md
 │   ├── Scripts/EnterpriseAppCertificateMonitor.ps1
+│   ├── Documentation/CLAUDE.md
 │   └── Tests/
 ├── Enterprise-App-Usage-Monitor/               # Application usage analytics
-│   ├── Azure-Automation/                     # Azure Automation deployment
+│   ├── Azure-Automation/                     # All deployment scripts consolidated
+│   │   ├── Deploy-EnterpriseAppUsageMonitor.ps1
+│   │   ├── Create-[Service]DeploymentGroup.ps1
+│   │   ├── Grant-[Service]Permissions.ps1
+│   │   └── README.md
 │   ├── Scripts/EnterpriseAppUsageMonitor.ps1
-│   └── Templates/
+│   ├── Documentation/CLAUDE.md
+│   └── Tests/
 ├── MFA-Compliance-Monitor/                     # MFA compliance enforcement
-│   ├── Azure-Automation/                     # Azure Automation deployment
+│   ├── Azure-Automation/                     # All deployment scripts consolidated
+│   │   ├── Deploy-MFAComplianceMonitor.ps1
+│   │   ├── Create-MFAMonitorDeploymentGroup.ps1
+│   │   ├── Grant-MFAMonitorPermissions.ps1
+│   │   └── README.md
 │   ├── Scripts/MFAComplianceMonitor.ps1
-│   ├── Templates/
+│   ├── Documentation/CLAUDE.md
 │   └── Tests/
 └── Validation-Report.csv                      # Automated quality reports
 ```

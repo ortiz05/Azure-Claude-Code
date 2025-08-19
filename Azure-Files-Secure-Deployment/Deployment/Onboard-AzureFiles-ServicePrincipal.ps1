@@ -300,6 +300,31 @@ function New-AutomationServicePrincipal {
         Write-Host "  Application ID: $($ServicePrincipal.AppId)" -ForegroundColor Gray
         Write-Host "  Object ID: $($ServicePrincipal.Id)" -ForegroundColor Gray
         
+        # Wait for service principal to propagate in Azure AD (eventual consistency)
+        Write-Host "  Waiting for service principal to propagate in Azure AD..." -ForegroundColor Yellow
+        $MaxWaitTime = 120 # Maximum wait time in seconds
+        $WaitInterval = 5  # Check every 5 seconds
+        $ElapsedTime = 0
+        
+        do {
+            Start-Sleep -Seconds $WaitInterval
+            $ElapsedTime += $WaitInterval
+            
+            # Try to retrieve the service principal to verify it's fully propagated
+            $VerifyServicePrincipal = Get-AzADServicePrincipal -ObjectId $ServicePrincipal.Id -ErrorAction SilentlyContinue
+            if ($VerifyServicePrincipal) {
+                Write-Host "  ✓ Service principal propagation confirmed (waited $ElapsedTime seconds)" -ForegroundColor Green
+                break
+            }
+            
+            Write-Host "  Still waiting... ($ElapsedTime/$MaxWaitTime seconds)" -ForegroundColor Gray
+            
+        } while ($ElapsedTime -lt $MaxWaitTime)
+        
+        if ($ElapsedTime -ge $MaxWaitTime) {
+            Write-Warning "Service principal may not be fully propagated yet. Role assignments might fail."
+        }
+        
         # Add application tags for governance
         Update-AzADServicePrincipal -ObjectId $ServicePrincipal.Id -Tag @(
             "AzureFilesAutomation",
@@ -358,13 +383,42 @@ function Set-ServicePrincipalRoles {
                 -ErrorAction SilentlyContinue
             
             if (-not $ExistingAssignment) {
-                New-AzRoleAssignment `
-                    -ObjectId $ServicePrincipal.Id `
-                    -RoleDefinitionName $RoleName `
-                    -Scope $Scope `
-                    -ErrorAction Stop | Out-Null
+                # Retry role assignment with exponential backoff for timing issues
+                $MaxRetries = 3
+                $RetryCount = 0
+                $AssignmentSucceeded = $false
                 
-                Write-Host "    ✓ Assigned: $RoleName" -ForegroundColor Green
+                do {
+                    try {
+                        if ($RetryCount -gt 0) {
+                            $WaitTime = [math]::Pow(2, $RetryCount) * 5  # 5, 10, 20 seconds
+                            Write-Host "      Retrying in $WaitTime seconds (attempt $($RetryCount + 1)/$($MaxRetries + 1))..." -ForegroundColor Gray
+                            Start-Sleep -Seconds $WaitTime
+                        }
+                        
+                        New-AzRoleAssignment `
+                            -ObjectId $ServicePrincipal.Id `
+                            -RoleDefinitionName $RoleName `
+                            -Scope $Scope `
+                            -ErrorAction Stop | Out-Null
+                        
+                        Write-Host "    ✓ Assigned: $RoleName" -ForegroundColor Green
+                        $AssignmentSucceeded = $true
+                        break
+                        
+                    } catch {
+                        $RetryCount++
+                        if ($RetryCount -gt $MaxRetries) {
+                            Write-Warning "    Failed to assign role $RoleName after $($MaxRetries + 1) attempts: $($_.Exception.Message)"
+                            if ($_.Exception.Message -like "*BadRequest*") {
+                                Write-Host "      This may be due to timing issues. You can manually assign the role later:" -ForegroundColor Yellow
+                                Write-Host "      New-AzRoleAssignment -ObjectId $($ServicePrincipal.Id) -RoleDefinitionName '$RoleName' -Scope '$Scope'" -ForegroundColor Gray
+                            }
+                        } else {
+                            Write-Host "      Attempt $($RetryCount) failed: $($_.Exception.Message)" -ForegroundColor Gray
+                        }
+                    }
+                } while ($RetryCount -le $MaxRetries -and -not $AssignmentSucceeded)
             } else {
                 Write-Host "    ℹ Already assigned: $RoleName" -ForegroundColor Gray
             }
@@ -375,11 +429,42 @@ function Set-ServicePrincipalRoles {
             Write-Host "  Assigning Key Vault Contributor role..." -ForegroundColor Gray
             $KeyVault = Get-AzKeyVault -VaultName $KeyVaultName -ErrorAction SilentlyContinue
             if ($KeyVault) {
-                New-AzRoleAssignment `
-                    -ObjectId $ServicePrincipal.Id `
-                    -RoleDefinitionName "Key Vault Contributor" `
-                    -Scope $KeyVault.ResourceId `
-                    -ErrorAction SilentlyContinue | Out-Null
+                # Retry Key Vault role assignment with exponential backoff
+                $MaxRetries = 3
+                $RetryCount = 0
+                $AssignmentSucceeded = $false
+                
+                do {
+                    try {
+                        if ($RetryCount -gt 0) {
+                            $WaitTime = [math]::Pow(2, $RetryCount) * 5  # 5, 10, 20 seconds
+                            Write-Host "      Retrying Key Vault role assignment in $WaitTime seconds (attempt $($RetryCount + 1)/$($MaxRetries + 1))..." -ForegroundColor Gray
+                            Start-Sleep -Seconds $WaitTime
+                        }
+                        
+                        New-AzRoleAssignment `
+                            -ObjectId $ServicePrincipal.Id `
+                            -RoleDefinitionName "Key Vault Contributor" `
+                            -Scope $KeyVault.ResourceId `
+                            -ErrorAction Stop | Out-Null
+                        
+                        Write-Host "    ✓ Assigned: Key Vault Contributor" -ForegroundColor Green
+                        $AssignmentSucceeded = $true
+                        break
+                        
+                    } catch {
+                        $RetryCount++
+                        if ($RetryCount -gt $MaxRetries) {
+                            Write-Warning "    Failed to assign Key Vault Contributor role after $($MaxRetries + 1) attempts: $($_.Exception.Message)"
+                            if ($_.Exception.Message -like "*BadRequest*") {
+                                Write-Host "      This may be due to timing issues. You can manually assign the role later:" -ForegroundColor Yellow
+                                Write-Host "      New-AzRoleAssignment -ObjectId $($ServicePrincipal.Id) -RoleDefinitionName 'Key Vault Contributor' -Scope '$($KeyVault.ResourceId)'" -ForegroundColor Gray
+                            }
+                        } else {
+                            Write-Host "      Attempt $($RetryCount) failed: $($_.Exception.Message)" -ForegroundColor Gray
+                        }
+                    }
+                } while ($RetryCount -le $MaxRetries -and -not $AssignmentSucceeded)
             }
         }
         
