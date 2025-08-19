@@ -219,6 +219,31 @@ function New-AzureFilesDeploymentGroup {
         Write-Host "✓ Created Azure AD group: $GroupName" -ForegroundColor Green
         Write-Host "  Group ID: $($Group.Id)" -ForegroundColor Gray
         
+        # Wait for Azure AD group to propagate (eventual consistency)
+        Write-Host "  Waiting for group to propagate in Azure AD..." -ForegroundColor Yellow
+        $MaxWaitTime = 120 # Maximum wait time in seconds
+        $WaitInterval = 5  # Check every 5 seconds
+        $ElapsedTime = 0
+        
+        do {
+            Start-Sleep -Seconds $WaitInterval
+            $ElapsedTime += $WaitInterval
+            
+            # Try to retrieve the group to verify it's fully propagated
+            $VerifyGroup = Get-AzADGroup -ObjectId $Group.Id -ErrorAction SilentlyContinue
+            if ($VerifyGroup) {
+                Write-Host "  ✓ Group propagation confirmed (waited $ElapsedTime seconds)" -ForegroundColor Green
+                break
+            }
+            
+            Write-Host "  Still waiting... ($ElapsedTime/$MaxWaitTime seconds)" -ForegroundColor Gray
+            
+        } while ($ElapsedTime -lt $MaxWaitTime)
+        
+        if ($ElapsedTime -ge $MaxWaitTime) {
+            Write-Warning "Group may not be fully propagated yet. Role assignments might fail."
+        }
+        
         return $Group
         
     } catch {
@@ -279,16 +304,41 @@ function Set-ResourceGroupPermissions {
             if ($ExistingAssignment) {
                 Write-Host "  ✓ Role already assigned: $($Role.Name)" -ForegroundColor Green
             } else {
-                try {
-                    New-AzRoleAssignment `
-                        -ObjectId $Group.Id `
-                        -RoleDefinitionName $Role.Name `
-                        -Scope $ResourceGroupScope
-                    
-                    Write-Host "  ✓ Assigned role: $($Role.Name)" -ForegroundColor Green
-                } catch {
-                    Write-Warning "  Failed to assign role $($Role.Name): $($_.Exception.Message)"
-                }
+                # Retry role assignment with exponential backoff for timing issues
+                $MaxRetries = 3
+                $RetryCount = 0
+                $AssignmentSucceeded = $false
+                
+                do {
+                    try {
+                        if ($RetryCount -gt 0) {
+                            $WaitTime = [math]::Pow(2, $RetryCount) * 5  # 5, 10, 20 seconds
+                            Write-Host "    Retrying in $WaitTime seconds (attempt $($RetryCount + 1)/$($MaxRetries + 1))..." -ForegroundColor Gray
+                            Start-Sleep -Seconds $WaitTime
+                        }
+                        
+                        New-AzRoleAssignment `
+                            -ObjectId $Group.Id `
+                            -RoleDefinitionName $Role.Name `
+                            -Scope $ResourceGroupScope
+                        
+                        Write-Host "  ✓ Assigned role: $($Role.Name)" -ForegroundColor Green
+                        $AssignmentSucceeded = $true
+                        break
+                        
+                    } catch {
+                        $RetryCount++
+                        if ($RetryCount -gt $MaxRetries) {
+                            Write-Warning "  Failed to assign role $($Role.Name) after $($MaxRetries + 1) attempts: $($_.Exception.Message)"
+                            if ($_.Exception.Message -like "*BadRequest*") {
+                                Write-Host "    This may be due to timing issues. You can manually assign the role later:" -ForegroundColor Yellow
+                                Write-Host "    New-AzRoleAssignment -ObjectId $($Group.Id) -RoleDefinitionName '$($Role.Name)' -Scope '$ResourceGroupScope'" -ForegroundColor Gray
+                            }
+                        } else {
+                            Write-Host "    Attempt $($RetryCount) failed: $($_.Exception.Message)" -ForegroundColor Gray
+                        }
+                    }
+                } while ($RetryCount -le $MaxRetries -and -not $AssignmentSucceeded)
             }
         }
         
