@@ -291,6 +291,125 @@ Initial implementation incorrectly assumed that **deploying infrastructure** req
 
 ---
 
+## 🗂️ Azure Storage Security Lessons
+
+### Lesson 3: Azure Storage "Public Access" Has Multiple Layers
+
+**Date Discovered**: 2025-08-19  
+**Context**: Automation-Logging-Storage-Setup deployment  
+**Severity**: Medium - Security Configuration Confusion
+
+#### The Problem
+Users often confuse different types of "public access" in Azure Storage, leading to either over-permissive configurations or unnecessarily restrictive setups that break automation functionality.
+
+#### Key Understanding: Multiple Public Access Controls
+
+**1. Public Network Access (`PublicNetworkAccess`)**
+```powershell
+# Controls whether storage accepts connections from internet
+PublicNetworkAccess = 'Enabled'   # Allows internet connections (with auth)
+PublicNetworkAccess = 'Disabled'  # Requires private endpoints only
+```
+
+**2. Blob Public Access (`AllowBlobPublicAccess`)**
+```powershell
+# Controls whether blobs can be accessed anonymously
+AllowBlobPublicAccess = $false  # No anonymous access (SECURE)
+AllowBlobPublicAccess = $true   # Allows anonymous blob access (RISKY)
+```
+
+**3. Network Access Rules (Applied Post-Deployment)**
+```powershell
+# Controls which networks can access storage
+DefaultAction = 'Deny'          # Block all by default
+Bypass = 'AzureServices'        # Allow Azure services through
+```
+
+#### The Secure Configuration for Automation
+
+**✅ Recommended for Azure Automation:**
+```powershell
+# Storage Account Parameters
+PublicNetworkAccess = 'Enabled'      # Required for Azure Automation access
+AllowBlobPublicAccess = $false       # Prevents anonymous access
+EnableHttpsTrafficOnly = $true       # HTTPS only
+MinimumTlsVersion = 'TLS1_2'         # Modern encryption
+
+# Network Rules (Applied After Creation)
+DefaultAction = 'Deny'               # Deny by default
+Bypass = 'AzureServices'             # Allow Azure services only
+```
+
+**🔒 Security Result:**
+- No anonymous access possible
+- All access requires authentication
+- Network traffic restricted by default
+- Azure Automation can still function
+- HTTPS with TLS 1.2+ enforced
+
+#### When to Use Complete Network Isolation
+
+**❌ Don't Use `PublicNetworkAccess = 'Disabled'` Unless:**
+- You have private endpoints configured
+- Azure Automation runbooks use private network connectivity
+- You're in a highly regulated environment with network isolation requirements
+
+**⚠️ Warning:** Disabling public network access without private endpoints will break Azure Automation connectivity.
+
+#### PowerShell Module Compatibility Issues
+
+**Problem**: Different Azure PowerShell module versions use different parameter names and object models.
+
+**✅ Compatibility Solutions:**
+
+**Container Public Access Values:**
+```powershell
+# ❌ Incompatible: PublicAccess = "None"
+# ✅ Compatible:   PublicAccess = "Off"
+PublicAccess = "Off"  # Use "Off" instead of "None"
+```
+
+**Container Metadata Application:**
+```powershell
+# ❌ May not work: Set-AzStorageContainerMetadata
+# ✅ Compatible approach:
+$ContainerRef = Get-AzStorageContainer -Name $ContainerName -Context $Context
+$ContainerRef.CloudBlobContainer.Metadata.Clear()
+foreach ($key in $Metadata.Keys) {
+    $ContainerRef.CloudBlobContainer.Metadata.Add($key, $Metadata[$key])
+}
+$ContainerRef.CloudBlobContainer.SetMetadata()
+```
+
+**Soft Delete Configuration:**
+```powershell
+# ❌ Parameter names vary by module version
+# ✅ Document manual configuration needed:
+Write-Host "Note: Configure soft delete policies via Azure Portal or ARM templates"
+```
+
+#### How to Prevent Security Misunderstandings
+
+1. **Always explain the security model clearly** in comments and documentation
+2. **Test with actual Azure credentials** to verify connectivity
+3. **Use layered security approach** instead of single controls
+4. **Document why each setting is needed** for the specific use case
+5. **Verify PowerShell module compatibility** across versions
+
+#### Security Validation Checklist
+
+For Azure Storage deployments, always verify:
+- [ ] `AllowBlobPublicAccess = $false` (no anonymous access)
+- [ ] `EnableHttpsTrafficOnly = $true` (encrypted transport)
+- [ ] `MinimumTlsVersion = 'TLS1_2'` (modern encryption)
+- [ ] Network rules configured (default deny + Azure services bypass)
+- [ ] Blob versioning enabled (audit trails)
+- [ ] Change feed enabled (security monitoring)
+- [ ] Container permissions set to private
+- [ ] Authentication required for all access
+
+---
+
 ## 📞 When to Escalate
 
 Immediately escalate to security team when discovering:
@@ -299,6 +418,8 @@ Immediately escalate to security team when discovering:
 - Authentication failures in live systems
 - Unexpected privilege escalations
 - Data exposure incidents
+- Confusion about Azure storage security models
+- PowerShell compatibility breaking security controls
 
 ---
 
