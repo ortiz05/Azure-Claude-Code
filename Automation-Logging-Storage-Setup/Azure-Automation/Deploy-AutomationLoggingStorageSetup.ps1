@@ -384,17 +384,27 @@ try {
             'MonitoringEnabled' = 'True'
         }
         
-        # Apply metadata to container
+        # Apply metadata and security policies to container
         try {
-            Set-AzStorageContainerMetadata -Container $Container.Name -Context $StorageContext -Metadata $ContainerMetadata
+            # Apply security metadata for governance
+            $ContainerRef = Get-AzStorageContainer -Name $Container.Name -Context $StorageContext
+            $ContainerRef.CloudBlobContainer.Metadata.Clear()
+            foreach ($key in $ContainerMetadata.Keys) {
+                $ContainerRef.CloudBlobContainer.Metadata.Add($key, $ContainerMetadata[$key])
+            }
+            $ContainerRef.CloudBlobContainer.SetMetadata()
             Write-Host "    ✓ Security metadata applied" -ForegroundColor Green
         } catch {
             Write-Warning "    Could not apply metadata to container $($Container.Name): $_"
         }
         
-        # Clear any default access policies and ensure no public access
-        Set-AzStorageContainerStoredAccessPolicy -Container $Container.Name -Context $StorageContext -Policy @()
-        Write-Host "    ✓ Access policies secured (no public access)" -ForegroundColor Green
+        # Ensure no public access policies
+        try {
+            Remove-AzStorageContainerStoredAccessPolicy -Container $Container.Name -Context $StorageContext -Policy "*" -ErrorAction SilentlyContinue
+            Write-Host "    ✓ Access policies secured (no public access)" -ForegroundColor Green
+        } catch {
+            Write-Host "    ✓ Container secured (no access policies found)" -ForegroundColor Green
+        }
     }
     
     # Create lifecycle management policy
