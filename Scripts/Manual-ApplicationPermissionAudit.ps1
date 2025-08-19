@@ -119,7 +119,7 @@ function Test-RequiredPermissions {
         "Application.Read.All",
         "Directory.Read.All",
         "DelegatedPermissionGrant.Read.All",
-        "AppRoleAssignment.Read.All"
+        "AppRoleAssignment.ReadWrite.All"
     )
     
     $Context = Get-MgContext
@@ -251,7 +251,7 @@ function Connect-ToMicrosoftGraph {
             Write-Host "✓ Already connected to tenant: $($Context.TenantId) with client: $($Context.ClientId)" -ForegroundColor Green
         } else {
             # Connect with specific client ID and tenant-specific authentication
-            Connect-MgGraph -ClientId $ClientId -TenantId $TenantId -Scopes "Application.Read.All","Directory.Read.All","DelegatedPermissionGrant.Read.All","AppRoleAssignment.Read.All" -NoWelcome
+            Connect-MgGraph -ClientId $ClientId -TenantId $TenantId -Scopes "Application.Read.All","Directory.Read.All","DelegatedPermissionGrant.Read.All","AppRoleAssignment.ReadWrite.All" -NoWelcome
             
             $Context = Get-MgContext
             Write-Host "✓ Connected to tenant: $($Context.TenantId) with client: $($Context.ClientId)" -ForegroundColor Green
@@ -329,12 +329,34 @@ try {
     
     # Get all Enterprise Applications (Service Principals)
     Write-Host "`nScanning Enterprise Applications..." -ForegroundColor Yellow
-    $ServicePrincipals = Get-MgServicePrincipal -All -Property Id,DisplayName,AppId,CreatedDateTime,PublisherName,ServicePrincipalType,AppRoles,OAuth2PermissionScopes
+    $ServicePrincipals = Get-MgServicePrincipal -All -Property Id,DisplayName,AppId,CreatedDateTime,PublisherName,ServicePrincipalType,AppRoles,OAuth2PermissionScopes,AppOwnerOrganizationId
     
     # Filter to only user-created applications
     $EnterpriseApps = $ServicePrincipals | Where-Object { 
         $_.ServicePrincipalType -eq "Application" -and 
-        (-not $_.PublisherName -or ($IncludeBuiltInApps -or $_.PublisherName -notlike "*Microsoft*"))
+        (
+            $IncludeBuiltInApps -or 
+            (
+                $_.PublisherName -and 
+                $_.PublisherName -notlike "*Microsoft*" -and
+                $_.AppOwnerOrganizationId -ne "f8cdef31-a31e-4b4a-93e4-5f571e91255a" -and
+                $_.DisplayName -notlike "Microsoft*" -and
+                $_.AppId -notin @(
+                    "00000003-0000-0000-c000-000000000000", # Microsoft Graph
+                    "00000002-0000-0000-c000-000000000000", # Azure AD Graph
+                    "797f4846-ba00-4fd7-ba43-dac1f8f63013"  # Azure Service Management
+                )
+            ) -or
+            (
+                -not $_.PublisherName -and 
+                $_.DisplayName -notlike "Microsoft*" -and
+                $_.DisplayName -notlike "*Office*" -and
+                $_.DisplayName -notlike "*Azure*" -and
+                $_.DisplayName -notlike "*SharePoint*" -and
+                $_.DisplayName -notlike "*Teams*" -and
+                $_.AppOwnerOrganizationId -ne "f8cdef31-a31e-4b4a-93e4-5f571e91255a"
+            )
+        )
     }
     
     Write-Host "Found $($EnterpriseApps.Count) Enterprise Applications" -ForegroundColor Green
