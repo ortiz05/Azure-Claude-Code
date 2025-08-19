@@ -9,6 +9,9 @@
     This script performs a detailed security audit of all application registrations and enterprise applications
     in your Azure AD tenant, cataloging both delegated and application permissions for internal security review.
     
+    IMPORTANT: This script requires a custom Azure AD application registration with the required permissions
+    since the default Microsoft Graph PowerShell application may be disabled in enterprise environments.
+    
     The script generates multiple CSV reports to help understand the security posture of applications:
     - Complete application inventory with permission details
     - High-risk permission analysis
@@ -17,6 +20,10 @@
     
 .PARAMETER TenantId
     Azure AD Tenant ID (required for targeted authentication)
+
+.PARAMETER ClientId
+    Application (client) ID of the Azure AD app registration to use for authentication
+    Required when the default Microsoft Graph PowerShell app is disabled
     
 .PARAMETER ExportPath
     Local directory path for CSV exports (default: C:\Temp\ApplicationAudit)
@@ -31,10 +38,10 @@
     Generate detailed reports with extended information (default: true)
 
 .EXAMPLE
-    .\Manual-ApplicationPermissionAudit.ps1 -TenantId "12345678-1234-1234-1234-123456789012"
+    .\Manual-ApplicationPermissionAudit.ps1 -TenantId "12345678-1234-1234-1234-123456789012" -ClientId "87654321-4321-4321-4321-210987654321"
     
 .EXAMPLE
-    .\Manual-ApplicationPermissionAudit.ps1 -TenantId "12345678-1234-1234-1234-123456789012" -ExportPath "C:\SecurityAudit" -IncludeBuiltInApps
+    .\Manual-ApplicationPermissionAudit.ps1 -TenantId "12345678-1234-1234-1234-123456789012" -ClientId "87654321-4321-4321-4321-210987654321" -ExportPath "C:\SecurityAudit" -IncludeBuiltInApps
 #>
 
 [CmdletBinding()]
@@ -42,6 +49,10 @@ param(
     [Parameter(Mandatory = $true)]
     [ValidatePattern('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')]
     [string]$TenantId,
+
+    [Parameter(Mandatory = $true)]
+    [ValidatePattern('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')]
+    [string]$ClientId,
     
     [Parameter(Mandatory = $false)]
     [string]$ExportPath = "C:\Temp\ApplicationAudit",
@@ -62,6 +73,7 @@ Write-Host "===========================================" -ForegroundColor Cyan
 Write-Host "Application Permission Security Audit" -ForegroundColor Cyan
 Write-Host "===========================================" -ForegroundColor Cyan
 Write-Host "Tenant ID: $TenantId" -ForegroundColor Yellow
+Write-Host "Client ID: $ClientId" -ForegroundColor Yellow
 Write-Host "Export Path: $ExportPath" -ForegroundColor Yellow
 Write-Host "Include Built-in Apps: $IncludeBuiltInApps" -ForegroundColor Yellow
 Write-Host "Start Time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Yellow
@@ -233,16 +245,16 @@ function Connect-ToMicrosoftGraph {
     try {
         Write-Host "Connecting to Microsoft Graph..." -ForegroundColor Yellow
         
-        # Check if already connected to the correct tenant
+        # Check if already connected to the correct tenant and client
         $Context = Get-MgContext
-        if ($Context -and $Context.TenantId -eq $TenantId) {
-            Write-Host "✓ Already connected to tenant: $($Context.TenantId)" -ForegroundColor Green
+        if ($Context -and $Context.TenantId -eq $TenantId -and $Context.ClientId -eq $ClientId) {
+            Write-Host "✓ Already connected to tenant: $($Context.TenantId) with client: $($Context.ClientId)" -ForegroundColor Green
         } else {
-            # Connect with tenant-specific authentication
-            Connect-MgGraph -TenantId $TenantId -Scopes "Application.Read.All","Directory.Read.All","DelegatedPermissionGrant.Read.All","AppRoleAssignment.Read.All" -NoWelcome
+            # Connect with specific client ID and tenant-specific authentication
+            Connect-MgGraph -ClientId $ClientId -TenantId $TenantId -Scopes "Application.Read.All","Directory.Read.All","DelegatedPermissionGrant.Read.All","AppRoleAssignment.Read.All" -NoWelcome
             
             $Context = Get-MgContext
-            Write-Host "✓ Connected to tenant: $($Context.TenantId)" -ForegroundColor Green
+            Write-Host "✓ Connected to tenant: $($Context.TenantId) with client: $($Context.ClientId)" -ForegroundColor Green
         }
         
         Test-RequiredPermissions
@@ -494,6 +506,7 @@ try {
     $ExecutiveSummary = [PSCustomObject]@{
         AuditDate = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
         TenantId = $TenantId
+        ClientId = $ClientId
         TotalApplicationsAudited = $ApplicationData.Count
         ApplicationRegistrations = ($ApplicationData | Where-Object { $_.Type -eq "Application Registration" }).Count
         EnterpriseApplications = ($ApplicationData | Where-Object { $_.Type -eq "Enterprise Application" }).Count
