@@ -21,6 +21,10 @@ param(
     [ValidateLength(1, 256)]
     [string]$GroupName = "DeviceCleanup-Automation-Users",
     
+    [Parameter(Mandatory = $true, HelpMessage = "Resource group name where Azure Automation will be deployed")]
+    [ValidateLength(1, 90)]
+    [string]$ResourceGroupName,
+    
     [Parameter(Mandatory = $false, HelpMessage = "Group description")]
     [string]$GroupDescription = "Device Cleanup Automation permissions for enterprise device lifecycle management",
     
@@ -97,6 +101,7 @@ Write-Host @"
 
 Write-Host "Subscription: $SubscriptionId" -ForegroundColor Yellow
 Write-Host "Tenant ID: $TenantId" -ForegroundColor Yellow
+Write-Host "Resource Group: $ResourceGroupName" -ForegroundColor Yellow
 Write-Host "Group Name: $GroupName" -ForegroundColor Yellow
 Write-Host "WhatIf Mode: $WhatIf" -ForegroundColor Yellow
 Write-Host "========================================`n" -ForegroundColor Cyan
@@ -125,6 +130,25 @@ $RequiredGraphPermissions = @(
         Name = "Mail.Send"
         Type = "Application"
         Reason = "Send email notifications to users and administrators"
+        Required = $true
+    }
+)
+
+# Required Azure RBAC roles for Device Cleanup Automation deployment
+$RequiredAzureRoles = @(
+    @{
+        Name = "Automation Contributor"
+        Reason = "Create and manage Azure Automation runbooks, schedules, and configurations"
+        Required = $true
+    },
+    @{
+        Name = "Contributor"
+        Reason = "Create and manage Azure resources in the resource group"
+        Required = $true
+    },
+    @{
+        Name = "User Access Administrator"
+        Reason = "Grant Graph API permissions to managed identity"
         Required = $true
     }
 )
@@ -247,6 +271,105 @@ function New-DeviceCleanupDeploymentGroup {
     }
 }
 
+function Set-ResourceGroupPermissions {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Group
+    )
+    
+    try {
+        Write-Host "Assigning Azure RBAC permissions..." -ForegroundColor Yellow
+        
+        # Define the resource group scope
+        $ResourceGroupScope = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName"
+        
+        # Verify resource group exists
+        $ResourceGroup = Get-AzResourceGroup -Name $ResourceGroupName -ErrorAction SilentlyContinue
+        if (-not $ResourceGroup) {
+            Write-Host "Resource group '$ResourceGroupName' does not exist. Creating it..." -ForegroundColor Yellow
+            
+            if ($WhatIf) {
+                Write-Host "[WHATIF] Would create resource group: $ResourceGroupName" -ForegroundColor Yellow
+            } else {
+                # Prompt for location since we need to create the RG
+                $Location = Read-Host "Enter Azure region for resource group (e.g., 'East US 2')"
+                New-AzResourceGroup -Name $ResourceGroupName -Location $Location
+                Write-Host "✓ Created resource group: $ResourceGroupName" -ForegroundColor Green
+            }
+        }
+        
+        # Assign each required Azure RBAC role
+        foreach ($Role in $RequiredAzureRoles) {
+            if (-not $Role.Required) {
+                Write-Host "  Skipping role: $($Role.Name) (not required for this configuration)" -ForegroundColor Gray
+                continue
+            }
+            
+            Write-Host "  Assigning role: $($Role.Name)" -ForegroundColor Gray
+            Write-Host "    Purpose: $($Role.Reason)" -ForegroundColor DarkGray
+            
+            if ($WhatIf) {
+                Write-Host "  [WHATIF] Would assign role: $($Role.Name)" -ForegroundColor Yellow
+                continue
+            }
+            
+            # Check if role assignment already exists
+            $ExistingAssignment = Get-AzRoleAssignment `
+                -ObjectId $Group.Id `
+                -RoleDefinitionName $Role.Name `
+                -Scope $ResourceGroupScope `
+                -ErrorAction SilentlyContinue
+            
+            if ($ExistingAssignment) {
+                Write-Host "  ✓ Role already assigned: $($Role.Name)" -ForegroundColor Green
+            } else {
+                # Retry role assignment with exponential backoff for timing issues
+                $MaxRetries = 3
+                $RetryCount = 0
+                $AssignmentSucceeded = $false
+                
+                do {
+                    try {
+                        if ($RetryCount -gt 0) {
+                            $WaitTime = [math]::Pow(2, $RetryCount) * 5  # 5, 10, 20 seconds
+                            Write-Host "    Retrying in $WaitTime seconds (attempt $($RetryCount + 1)/$($MaxRetries + 1))..." -ForegroundColor Gray
+                            Start-Sleep -Seconds $WaitTime
+                        }
+                        
+                        New-AzRoleAssignment `
+                            -ObjectId $Group.Id `
+                            -RoleDefinitionName $Role.Name `
+                            -Scope $ResourceGroupScope
+                        
+                        Write-Host "  ✓ Assigned role: $($Role.Name)" -ForegroundColor Green
+                        $AssignmentSucceeded = $true
+                        break
+                        
+                    } catch {
+                        $RetryCount++
+                        if ($RetryCount -gt $MaxRetries) {
+                            Write-Warning "  Failed to assign role $($Role.Name) after $($MaxRetries + 1) attempts: $($_.Exception.Message)"
+                            if ($_.Exception.Message -like "*BadRequest*") {
+                                Write-Host "    This may be due to timing issues. You can manually assign the role later:" -ForegroundColor Yellow
+                                Write-Host "    New-AzRoleAssignment -ObjectId $($Group.Id) -RoleDefinitionName '$($Role.Name)' -Scope '$ResourceGroupScope'" -ForegroundColor Gray
+                            }
+                        } else {
+                            Write-Host "    Attempt $($RetryCount) failed: $($_.Exception.Message)" -ForegroundColor Gray
+                        }
+                    }
+                } while ($RetryCount -le $MaxRetries -and -not $AssignmentSucceeded)
+            }
+        }
+        
+        Write-Host "✓ Azure RBAC role assignments completed" -ForegroundColor Green
+        return $true
+        
+    } catch {
+        Write-Error "Failed to assign Azure RBAC permissions: $($_.Exception.Message)"
+        return $false
+    }
+}
+
 function Show-GraphPermissionInstructions {
     param(
         [Parameter(Mandatory = $true)]
@@ -299,6 +422,15 @@ function Show-GroupSummary {
     Write-Host "  ID: $($Group.Id)" -ForegroundColor White
     Write-Host "  Type: Security Group" -ForegroundColor White
     Write-Host "  Description: $GroupDescription" -ForegroundColor White
+    
+    Write-Host "`n🔐 Assigned Azure RBAC Permissions:" -ForegroundColor Cyan
+    Write-Host "  Scope: /subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName" -ForegroundColor White
+    foreach ($Role in $RequiredAzureRoles) {
+        if ($Role.Required) {
+            Write-Host "  ✓ $($Role.Name)" -ForegroundColor Green
+            Write-Host "    Purpose: $($Role.Reason)" -ForegroundColor Gray
+        }
+    }
     
     Write-Host "`n🎯 Purpose:" -ForegroundColor Cyan
     Write-Host "  This group provides access for Device Cleanup Automation service principals" -ForegroundColor White
@@ -360,10 +492,16 @@ try {
         throw "Failed to create deployment group"
     }
     
-    # Step 4: Show Graph permission instructions
+    # Step 4: Assign Azure RBAC permissions
+    $PermissionsSet = Set-ResourceGroupPermissions -Group $Group
+    if (-not $PermissionsSet -and -not $WhatIf) {
+        Write-Warning "Failed to assign some Azure RBAC permissions. Check troubleshooting section."
+    }
+    
+    # Step 5: Show Graph permission instructions
     Show-GraphPermissionInstructions -Group $Group
     
-    # Step 5: Show summary and instructions
+    # Step 6: Show summary and instructions
     Show-GroupSummary -Group $Group
     Show-ServicePrincipalInstructions -Group $Group
     
@@ -373,8 +511,10 @@ try {
     Write-Error "Setup failed: $($_.Exception.Message)"
     Write-Host "`nTroubleshooting:" -ForegroundColor Yellow
     Write-Host "1. Verify you have User Administrator or Global Administrator role (for group creation)" -ForegroundColor Gray
-    Write-Host "2. Verify you have Application Administrator role (for Graph API permissions)" -ForegroundColor Gray
-    Write-Host "3. Check if the group name conflicts with existing groups" -ForegroundColor Gray
-    Write-Host "4. Ensure Azure PowerShell modules are up to date" -ForegroundColor Gray
+    Write-Host "2. Verify you have Owner or User Access Administrator role (for Azure RBAC assignments)" -ForegroundColor Gray
+    Write-Host "3. Verify you have Application Administrator role (for Graph API permissions)" -ForegroundColor Gray
+    Write-Host "4. Check if the group name conflicts with existing groups" -ForegroundColor Gray
+    Write-Host "5. Verify the resource group exists or can be created" -ForegroundColor Gray
+    Write-Host "6. Ensure Azure PowerShell modules are up to date" -ForegroundColor Gray
     exit 1
 }
