@@ -17,6 +17,10 @@ param(
     [ValidatePattern("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")]
     [string]$TenantId,
     
+    [Parameter(Mandatory = $false, HelpMessage = "Custom Application ID for Azure authentication (if using enterprise app registration)")]
+    [ValidatePattern("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")]
+    [string]$ApplicationId,
+    
     [Parameter(Mandatory = $false, HelpMessage = "Azure AD group name for Device Cleanup automation permissions")]
     [ValidateLength(1, 256)]
     [string]$GroupName = "DeviceCleanup-Automation-Users",
@@ -173,7 +177,14 @@ function Connect-ToAzure {
             Write-Host "  - User Administrator or Global Administrator (to create groups)" -ForegroundColor Gray
             Write-Host "  - Application Administrator (to grant Graph permissions)" -ForegroundColor Gray
             Write-Host "  - Connecting to tenant: $TenantId" -ForegroundColor Gray
-            Connect-AzAccount -SubscriptionId $SubscriptionId -TenantId $TenantId
+            
+            if ($ApplicationId) {
+                Write-Host "  - Using custom Application ID: $ApplicationId" -ForegroundColor Gray
+                Connect-AzAccount -ApplicationId $ApplicationId -SubscriptionId $SubscriptionId -TenantId $TenantId
+            } else {
+                Write-Host "  - Using default interactive authentication" -ForegroundColor Gray
+                Connect-AzAccount -SubscriptionId $SubscriptionId -TenantId $TenantId
+            }
         }
         
         $Context = Get-AzContext

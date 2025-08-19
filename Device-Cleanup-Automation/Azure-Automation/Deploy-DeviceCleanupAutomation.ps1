@@ -1,18 +1,30 @@
 # Deploy-DeviceCleanupAutomation.ps1
-# Azure Automation deployment script for Device Cleanup Automation
+# Enhanced Azure Automation deployment script for Device Cleanup Automation
+# Auto-creates infrastructure and embeds full script content
 
 #Requires -Version 7.0
-#Requires -Modules Az.Accounts, Az.Automation
+#Requires -Modules Az.Accounts, Az.Automation, Az.Resources
 
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $true, HelpMessage = "Azure subscription ID")]
+    [ValidatePattern("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")]
     [string]$SubscriptionId,
     
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $true, HelpMessage = "Azure AD tenant ID")]
+    [ValidatePattern("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")]
+    [string]$TenantId,
+    
+    [Parameter(Mandatory = $false, HelpMessage = "Custom Application ID for Azure authentication (if using enterprise app registration)")]
+    [ValidatePattern("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")]
+    [string]$ApplicationId,
+    
+    [Parameter(Mandatory = $true, HelpMessage = "Resource group name")]
+    [ValidateLength(1, 90)]
     [string]$ResourceGroupName,
     
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $true, HelpMessage = "Automation account name")]
+    [ValidateLength(6, 50)]
     [string]$AutomationAccountName,
     
     [Parameter(Mandatory = $false)]
@@ -149,13 +161,30 @@ function Connect-ToAzure {
     try {
         Write-Host "Connecting to Azure..." -ForegroundColor Yellow
         
-        # Connect to Azure
         $Context = Get-AzContext
-        if (-not $Context -or $Context.Subscription.Id -ne $SubscriptionId) {
-            Connect-AzAccount -SubscriptionId $SubscriptionId
+        $NeedsConnection = $false
+        
+        if (-not $Context) {
+            $NeedsConnection = $true
+        } elseif ($Context.Subscription.Id -ne $SubscriptionId) {
+            $NeedsConnection = $true
+        } elseif ($Context.Tenant.Id -ne $TenantId) {
+            $NeedsConnection = $true
         }
         
+        if ($NeedsConnection) {
+            if ($ApplicationId) {
+                Write-Host "Using custom Application ID: $ApplicationId" -ForegroundColor Gray
+                Connect-AzAccount -ApplicationId $ApplicationId -SubscriptionId $SubscriptionId -TenantId $TenantId
+            } else {
+                Write-Host "Using default interactive authentication" -ForegroundColor Gray
+                Connect-AzAccount -SubscriptionId $SubscriptionId -TenantId $TenantId
+            }
+        }
+        
+        $Context = Get-AzContext
         Write-Host "✓ Connected to Azure subscription: $SubscriptionId" -ForegroundColor Green
+        Write-Host "  Tenant: $($Context.Tenant.Id)" -ForegroundColor Gray
         
     } catch {
         Write-Error "Failed to connect to Azure: $($_.Exception.Message)"

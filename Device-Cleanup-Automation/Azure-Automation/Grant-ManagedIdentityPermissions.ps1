@@ -2,6 +2,13 @@
 # Grants required Microsoft Graph permissions to Azure Automation Managed Identity
 #
 # This script must be run by a Global Administrator or Privileged Role Administrator
+#
+# Usage Examples:
+# Default authentication:
+#   .\Grant-ManagedIdentityPermissions.ps1 -ManagedIdentityObjectId "guid"
+#
+# Custom enterprise app registration:
+#   .\Grant-ManagedIdentityPermissions.ps1 -ManagedIdentityObjectId "guid" -ApplicationId "app-guid" -TenantId "tenant-guid"
 
 #Requires -Version 7.0
 #Requires -Modules Microsoft.Graph.Authentication, Microsoft.Graph.Applications
@@ -14,6 +21,14 @@ param(
     
     [Parameter(Mandatory = $false, HelpMessage = "Name of the Managed Identity for display")]
     [string]$ManagedIdentityName = "DeviceCleanupAutomation",
+    
+    [Parameter(Mandatory = $false, HelpMessage = "Custom Application ID for Microsoft Graph authentication (if using enterprise app registration)")]
+    [ValidatePattern("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")]
+    [string]$ApplicationId,
+    
+    [Parameter(Mandatory = $false, HelpMessage = "Azure AD Tenant ID (required when using custom Application ID)")]
+    [ValidatePattern("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")]
+    [string]$TenantId,
     
     [Parameter(Mandatory = $false, HelpMessage = "Test mode - show what would be granted without making changes")]
     [switch]$WhatIf
@@ -124,8 +139,18 @@ function Connect-ToMicrosoftGraph {
         Write-Host "Connecting to Microsoft Graph..." -ForegroundColor Yellow
         Write-Host "You need Global Administrator or Privileged Role Administrator role" -ForegroundColor Yellow
         
-        # Connect with required scopes
-        Connect-MgGraph -Scopes "Application.Read.All", "AppRoleAssignment.ReadWrite.All", "Directory.ReadWrite.All" -NoWelcome
+        # Connect with required scopes using custom app ID if provided
+        if ($ApplicationId -and $TenantId) {
+            Write-Host "Using custom Application ID: $ApplicationId" -ForegroundColor Gray
+            Write-Host "Target Tenant: $TenantId" -ForegroundColor Gray
+            Connect-MgGraph -ClientId $ApplicationId -TenantId $TenantId -Scopes "Application.Read.All", "AppRoleAssignment.ReadWrite.All", "Directory.ReadWrite.All" -NoWelcome
+        } elseif ($ApplicationId) {
+            Write-Host "Using custom Application ID: $ApplicationId" -ForegroundColor Gray
+            Connect-MgGraph -ClientId $ApplicationId -Scopes "Application.Read.All", "AppRoleAssignment.ReadWrite.All", "Directory.ReadWrite.All" -NoWelcome
+        } else {
+            Write-Host "Using default interactive authentication" -ForegroundColor Gray
+            Connect-MgGraph -Scopes "Application.Read.All", "AppRoleAssignment.ReadWrite.All", "Directory.ReadWrite.All" -NoWelcome
+        }
         
         $Context = Get-MgContext
         Write-Host "✓ Connected to tenant: $($Context.TenantId)" -ForegroundColor Green
