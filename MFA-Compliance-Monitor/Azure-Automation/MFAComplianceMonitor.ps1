@@ -20,7 +20,16 @@
     Array of user UPNs to exclude from monitoring
     
 .PARAMETER ExportPath
-    Path where CSV reports will be saved
+    Path where CSV reports will be saved (DEPRECATED - use blob storage)
+    
+.PARAMETER StorageAccountName
+    Azure Storage Account name for report storage (required for blob storage)
+    
+.PARAMETER StorageContainerName
+    Azure Storage Container name for reports (default: mfa-compliance-reports)
+    
+.PARAMETER UseManagedIdentity
+    Use Azure Automation managed identity for authentication (recommended)
     
 .PARAMETER IncludeCompliantUsers
     Include users who only used Microsoft Authenticator in reports
@@ -49,6 +58,15 @@ param(
     [string]$ExportPath = "C:\MFAComplianceReports",
     
     [Parameter(Mandatory=$false)]
+    [string]$StorageAccountName,
+    
+    [Parameter(Mandatory=$false)]
+    [string]$StorageContainerName = "mfa-compliance-reports",
+    
+    [Parameter(Mandatory=$false)]
+    [switch]$UseManagedIdentity = $true,
+    
+    [Parameter(Mandatory=$false)]
     [switch]$IncludeCompliantUsers = $false,
     
     [Parameter(Mandatory=$false)]
@@ -60,6 +78,12 @@ param(
 
 # Import required modules
 Import-Module Microsoft.Graph.Authentication -ErrorAction Stop
+
+# Import Azure Storage modules for blob storage functionality
+if ($StorageAccountName) {
+    Import-Module Az.Storage -ErrorAction Stop
+    Import-Module Az.Accounts -ErrorAction Stop
+}
 Import-Module Microsoft.Graph.Reports -ErrorAction Stop
 Import-Module Microsoft.Graph.Users -ErrorAction Stop
 
@@ -70,6 +94,47 @@ $Script:ProcessingErrors = [System.Collections.ArrayList]::new()
 $Script:EmailsSent = [System.Collections.ArrayList]::new()
 
 #region Helper Functions
+
+function Export-ToBlob {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$FilePath,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$BlobName,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$StorageAccount = $StorageAccountName,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$ContainerName = $StorageContainerName
+    )
+    
+    if (-not $StorageAccount) {
+        Write-Warning "No storage account specified. Skipping blob upload for $BlobName"
+        return $false
+    }
+    
+    try {
+        # Create storage context using managed identity
+        $Context = New-AzStorageContext -StorageAccountName $StorageAccount -UseConnectedAccount
+        
+        # Create folder structure with year/month
+        $DatePath = Get-Date -Format "yyyy/MM"
+        $BlobPath = "$DatePath/$BlobName"
+        
+        # Upload file to blob storage
+        $BlobResult = Set-AzStorageBlobContent -File $FilePath -Container $ContainerName -Blob $BlobPath -Context $Context -StandardBlobTier Cool -Force
+        
+        Write-Output "✓ Uploaded to blob storage: $($BlobResult.Name)"
+        return $true
+    }
+    catch {
+        Write-Warning "Failed to upload $BlobName to blob storage: $_"
+        return $false
+    }
+}
 
 function Test-RequiredPermissions {
     [CmdletBinding()]
@@ -742,6 +807,9 @@ Write-Output "WhatIf Mode: $($WhatIf.IsPresent)"
 Write-Output "User Notifications: $($SendUserNotifications.IsPresent)"
 Write-Output "Admin Summary: $($SendAdminSummary.IsPresent)"
 Write-Output "Export Path: $ExportPath"
+if ($StorageAccountName) {
+    Write-Output "Blob Storage: $StorageAccountName/$StorageContainerName"
+}
 Write-Output "Start Time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 Write-Output "========================================="
 
@@ -756,11 +824,20 @@ try {
     
     $Context = Get-MgContext
     if ($null -eq $Context) {
-        try {
+        if ($UseManagedIdentity -or $StorageAccountName) {
+            # Use Managed Identity for authentication (required for blob storage)
+            Write-Output "Connecting with Azure Automation Managed Identity..."
             Connect-MgGraph -Identity -NoWelcome
+            
+            # Also connect to Azure for storage operations if needed
+            if ($StorageAccountName) {
+                Write-Output "Connecting to Azure for storage operations..."
+                Connect-AzAccount -Identity
+            }
         }
-        catch {
-            Write-Warning "Managed Identity connection failed, trying with required scopes..."
+        else {
+            # Fallback authentication (not recommended for production)
+            Write-Warning "Using fallback authentication. For production, use managed identity."
             Connect-MgGraph -Scopes "AuditLog.Read.All","User.Read.All","Mail.Send","Directory.Read.All" -NoWelcome
         }
     }
@@ -849,6 +926,11 @@ Cannot proceed safely without proper permissions.
         $NonCompliantFile = Join-Path $ExportPath "NonCompliantMFAUsers_$Timestamp.csv"
         $NonCompliantReport | Export-Csv -Path $NonCompliantFile -NoTypeInformation -Encoding UTF8
         Write-Output "Non-compliant users report: $NonCompliantFile"
+        
+        # Upload to blob storage if configured
+        if ($StorageAccountName) {
+            Export-ToBlob -FilePath $NonCompliantFile -BlobName "NonCompliantMFAUsers_$Timestamp.csv"
+        }
     }
     
     # Export compliant users (if requested)
@@ -867,6 +949,11 @@ Cannot proceed safely without proper permissions.
         $CompliantFile = Join-Path $ExportPath "CompliantMFAUsers_$Timestamp.csv"
         $CompliantReport | Export-Csv -Path $CompliantFile -NoTypeInformation -Encoding UTF8
         Write-Output "Compliant users report: $CompliantFile"
+        
+        # Upload to blob storage if configured
+        if ($StorageAccountName) {
+            Export-ToBlob -FilePath $CompliantFile -BlobName "CompliantMFAUsers_$Timestamp.csv"
+        }
     }
     
     # Export detailed sign-in data
@@ -891,6 +978,11 @@ Cannot proceed safely without proper permissions.
         $DetailedFile = Join-Path $ExportPath "NonCompliantSignInDetails_$Timestamp.csv"
         $DetailedSignIns | Export-Csv -Path $DetailedFile -NoTypeInformation -Encoding UTF8
         Write-Output "Detailed sign-in report: $DetailedFile"
+        
+        # Upload to blob storage if configured
+        if ($StorageAccountName) {
+            Export-ToBlob -FilePath $DetailedFile -BlobName "NonCompliantSignInDetails_$Timestamp.csv"
+        }
     }
     
     # Export processing errors
@@ -898,6 +990,11 @@ Cannot proceed safely without proper permissions.
         $ErrorFile = Join-Path $ExportPath "ProcessingErrors_$Timestamp.csv"
         $Script:ProcessingErrors | Export-Csv -Path $ErrorFile -NoTypeInformation -Encoding UTF8
         Write-Output "Processing errors report: $ErrorFile"
+        
+        # Upload to blob storage if configured
+        if ($StorageAccountName) {
+            Export-ToBlob -FilePath $ErrorFile -BlobName "ProcessingErrors_$Timestamp.csv"
+        }
     }
     
     # Generate summary CSV
@@ -922,6 +1019,11 @@ Cannot proceed safely without proper permissions.
     $SummaryFile = Join-Path $ExportPath "MFAComplianceSummary_$Timestamp.csv"
     $SummaryData | Export-Csv -Path $SummaryFile -NoTypeInformation -Encoding UTF8
     Write-Output "Summary report: $SummaryFile"
+    
+    # Upload summary to blob storage if configured
+    if ($StorageAccountName) {
+        Export-ToBlob -FilePath $SummaryFile -BlobName "MFAComplianceSummary_$Timestamp.csv"
+    }
     
     # Send admin summary report
     if ($SendAdminSummary -and $ITAdminEmails.Count -gt 0) {
@@ -949,6 +1051,9 @@ Cannot proceed safely without proper permissions.
     Write-Output "Processing Errors: $($Script:ProcessingErrors.Count)"
     Write-Output "Mode: $(if ($WhatIf) { 'Simulation (WhatIf)' } else { 'Production' })"
     Write-Output "Reports saved to: $ExportPath"
+    if ($StorageAccountName) {
+        Write-Output "Reports uploaded to blob storage: $StorageAccountName/$StorageContainerName"
+    }
     Write-Output "End Time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
     Write-Output "========================================="
     
@@ -985,6 +1090,11 @@ Script Parameters:
     
     $ErrorDetails | Out-File -FilePath $ErrorFile -Encoding UTF8
     Write-Output "Error details saved to: $ErrorFile"
+    
+    # Upload error to blob storage if configured
+    if ($StorageAccountName) {
+        Export-ToBlob -FilePath $ErrorFile -BlobName "CriticalError_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt"
+    }
     
     # Send error notification to admins if possible
     if ($ITAdminEmails.Count -gt 0) {

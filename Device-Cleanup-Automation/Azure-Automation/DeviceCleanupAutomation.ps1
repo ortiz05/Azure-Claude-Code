@@ -35,7 +35,16 @@
     Maximum absolute number of devices that can be deleted
     
 .PARAMETER ExportPath
-    Path where CSV reports and backups will be saved
+    Path where CSV reports and backups will be saved (DEPRECATED - use blob storage)
+    
+.PARAMETER StorageAccountName
+    Azure Storage Account name for report storage (required for blob storage)
+    
+.PARAMETER StorageContainerName
+    Azure Storage Container name for reports (default: device-cleanup-reports)
+    
+.PARAMETER UseManagedIdentity
+    Use Azure Automation managed identity for authentication (recommended)
 #>
 
 param(
@@ -71,13 +80,28 @@ param(
     [int]$MaxDeleteAbsolute = 100,
     
     [Parameter(Mandatory=$false)]
-    [string]$ExportPath = "C:\DeviceCleanupReports"
+    [string]$ExportPath = "C:\DeviceCleanupReports",
+    
+    [Parameter(Mandatory=$false)]
+    [string]$StorageAccountName,
+    
+    [Parameter(Mandatory=$false)]
+    [string]$StorageContainerName = "device-cleanup-reports",
+    
+    [Parameter(Mandatory=$false)]
+    [switch]$UseManagedIdentity = $true
 )
 
 # Import required modules
 Import-Module Microsoft.Graph.Authentication -ErrorAction Stop
 Import-Module Microsoft.Graph.Identity.DirectoryManagement -ErrorAction Stop
 Import-Module Microsoft.Graph.DeviceManagement.Enrollment -ErrorAction SilentlyContinue
+
+# Import Azure Storage modules for blob storage functionality
+if ($StorageAccountName) {
+    Import-Module Az.Storage -ErrorAction Stop
+    Import-Module Az.Accounts -ErrorAction Stop
+}
 
 # Initialize tracking collections
 $Script:ProcessedDevices = [System.Collections.ArrayList]::new()
@@ -86,6 +110,47 @@ $Script:FailedDevices = [System.Collections.ArrayList]::new()
 $Script:AllInactiveDevices = [System.Collections.ArrayList]::new()
 
 #region Helper Functions
+
+function Export-ToBlob {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$FilePath,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$BlobName,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$StorageAccount = $StorageAccountName,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$ContainerName = $StorageContainerName
+    )
+    
+    if (-not $StorageAccount) {
+        Write-Warning "No storage account specified. Skipping blob upload for $BlobName"
+        return $false
+    }
+    
+    try {
+        # Create storage context using managed identity
+        $Context = New-AzStorageContext -StorageAccountName $StorageAccount -UseConnectedAccount
+        
+        # Create folder structure with year/month
+        $DatePath = Get-Date -Format "yyyy/MM"
+        $BlobPath = "$DatePath/$BlobName"
+        
+        # Upload file to blob storage
+        $BlobResult = Set-AzStorageBlobContent -File $FilePath -Container $ContainerName -Blob $BlobPath -Context $Context -StandardBlobTier Cool -Force
+        
+        Write-Output "✓ Uploaded to blob storage: $($BlobResult.Name)"
+        return $true
+    }
+    catch {
+        Write-Warning "Failed to upload $BlobName to blob storage: $_"
+        return $false
+    }
+}
 
 function Test-RequiredPermissions {
     [CmdletBinding()]
@@ -581,6 +646,9 @@ Write-Output "Inactive Days Threshold: $InactiveDays"
 Write-Output "Cleanup Type: $CleanupType"
 Write-Output "WhatIf Mode: $($WhatIf.IsPresent)"
 Write-Output "Export Path: $ExportPath"
+if ($StorageAccountName) {
+    Write-Output "Blob Storage: $StorageAccountName/$StorageContainerName"
+}
 Write-Output "Start Time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 Write-Output "========================================="
 
@@ -596,12 +664,20 @@ try {
     # Check if already connected
     $Context = Get-MgContext
     if ($null -eq $Context) {
-        # Try to connect with Managed Identity first
-        try {
+        if ($UseManagedIdentity -or $StorageAccountName) {
+            # Use Managed Identity for authentication (required for blob storage)
+            Write-Output "Connecting with Azure Automation Managed Identity..."
             Connect-MgGraph -Identity -NoWelcome
+            
+            # Also connect to Azure for storage operations if needed
+            if ($StorageAccountName) {
+                Write-Output "Connecting to Azure for storage operations..."
+                Connect-AzAccount -Identity
+            }
         }
-        catch {
-            Write-Warning "Managed Identity connection failed, trying with default authentication..."
+        else {
+            # Fallback authentication (not recommended for production)
+            Write-Warning "Using fallback authentication. For production, use managed identity."
             Connect-MgGraph -Scopes "Device.ReadWrite.All","User.Read.All","Directory.ReadWrite.All" -NoWelcome
         }
     }
@@ -688,6 +764,11 @@ Cannot proceed safely without proper permissions, even in WhatIf mode.
         $AllDevicesFile = Join-Path $ExportPath "AllInactiveDevices_$Timestamp.csv"
         $Script:AllInactiveDevices | Export-Csv -Path $AllDevicesFile -NoTypeInformation -Encoding UTF8
         Write-Output "All inactive devices report: $AllDevicesFile"
+        
+        # Upload to blob storage if configured
+        if ($StorageAccountName) {
+            Export-ToBlob -FilePath $AllDevicesFile -BlobName "AllInactiveDevices_$Timestamp.csv"
+        }
     }
     
     # Export processed devices
@@ -695,6 +776,11 @@ Cannot proceed safely without proper permissions, even in WhatIf mode.
         $ProcessedFile = Join-Path $ExportPath "ProcessedDevices_$Timestamp.csv"
         $Script:ProcessedDevices | Export-Csv -Path $ProcessedFile -NoTypeInformation -Encoding UTF8
         Write-Output "Processed devices report: $ProcessedFile"
+        
+        # Upload to blob storage if configured
+        if ($StorageAccountName) {
+            Export-ToBlob -FilePath $ProcessedFile -BlobName "ProcessedDevices_$Timestamp.csv"
+        }
     }
     
     # Export excluded devices
@@ -702,6 +788,11 @@ Cannot proceed safely without proper permissions, even in WhatIf mode.
         $ExcludedFile = Join-Path $ExportPath "ExcludedDevices_$Timestamp.csv"
         $Script:ExcludedDevices | Export-Csv -Path $ExcludedFile -NoTypeInformation -Encoding UTF8
         Write-Output "Excluded devices report: $ExcludedFile"
+        
+        # Upload to blob storage if configured
+        if ($StorageAccountName) {
+            Export-ToBlob -FilePath $ExcludedFile -BlobName "ExcludedDevices_$Timestamp.csv"
+        }
     }
     
     # Export failed devices
@@ -709,6 +800,11 @@ Cannot proceed safely without proper permissions, even in WhatIf mode.
         $FailedFile = Join-Path $ExportPath "FailedDevices_$Timestamp.csv"
         $Script:FailedDevices | Export-Csv -Path $FailedFile -NoTypeInformation -Encoding UTF8
         Write-Output "Failed devices report: $FailedFile"
+        
+        # Upload to blob storage if configured
+        if ($StorageAccountName) {
+            Export-ToBlob -FilePath $FailedFile -BlobName "FailedDevices_$Timestamp.csv"
+        }
     }
     
     # Generate summary CSV
@@ -733,6 +829,11 @@ Cannot proceed safely without proper permissions, even in WhatIf mode.
     $SummaryData | Export-Csv -Path $SummaryFile -NoTypeInformation -Encoding UTF8
     Write-Output "Summary report: $SummaryFile"
     
+    # Upload summary to blob storage if configured
+    if ($StorageAccountName) {
+        Export-ToBlob -FilePath $SummaryFile -BlobName "CleanupSummary_$Timestamp.csv"
+    }
+    
     # Display summary
     Write-Output "`n========================================="
     Write-Output "Device Cleanup Summary"
@@ -744,6 +845,9 @@ Cannot proceed safely without proper permissions, even in WhatIf mode.
     Write-Output "Failed Operations: $($Script:FailedDevices.Count)"
     Write-Output "Mode: $(if ($WhatIf) { 'Simulation (WhatIf)' } else { 'Production' })"
     Write-Output "Reports saved to: $ExportPath"
+    if ($StorageAccountName) {
+        Write-Output "Reports uploaded to blob storage: $StorageAccountName/$StorageContainerName"
+    }
     Write-Output "End Time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
     Write-Output "========================================="
     
@@ -762,6 +866,11 @@ catch {
     $ErrorFile = Join-Path $ExportPath "Error_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt"
     $_ | Out-File -FilePath $ErrorFile -Encoding UTF8
     Write-Output "Error details saved to: $ErrorFile"
+    
+    # Upload error to blob storage if configured
+    if ($StorageAccountName) {
+        Export-ToBlob -FilePath $ErrorFile -BlobName "Error_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt"
+    }
     
     throw
 }
