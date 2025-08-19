@@ -20,7 +20,16 @@
     Array of application IDs or display names to exclude from analysis
     
 .PARAMETER ExportPath
-    Path where CSV reports will be saved
+    Path where CSV reports will be saved (DEPRECATED - use blob storage)
+    
+.PARAMETER StorageAccountName
+    Azure Storage Account name for report storage (required for blob storage)
+    
+.PARAMETER StorageContainerName
+    Azure Storage Container name for reports (default: app-usage-reports)
+    
+.PARAMETER UseManagedIdentity
+    Use Azure Automation managed identity for authentication (recommended)
     
 .PARAMETER IncludeActiveApps
     Include actively used applications in reports
@@ -49,6 +58,15 @@ param(
     [string]$ExportPath = "C:\EnterpriseAppReports",
     
     [Parameter(Mandatory=$false)]
+    [string]$StorageAccountName,
+    
+    [Parameter(Mandatory=$false)]
+    [string]$StorageContainerName = "app-usage-reports",
+    
+    [Parameter(Mandatory=$false)]
+    [switch]$UseManagedIdentity = $true,
+    
+    [Parameter(Mandatory=$false)]
     [switch]$IncludeActiveApps = $false,
     
     [Parameter(Mandatory=$false)]
@@ -63,6 +81,12 @@ Import-Module Microsoft.Graph.Authentication -ErrorAction Stop
 Import-Module Microsoft.Graph.Applications -ErrorAction Stop
 Import-Module Microsoft.Graph.Reports -ErrorAction Stop
 
+# Import Azure Storage modules for blob storage functionality
+if ($StorageAccountName) {
+    Import-Module Az.Storage -ErrorAction Stop
+    Import-Module Az.Accounts -ErrorAction Stop
+}
+
 # Initialize tracking collections
 $Script:UnusedApplications = [System.Collections.ArrayList]::new()
 $Script:ActiveApplications = [System.Collections.ArrayList]::new()
@@ -70,6 +94,47 @@ $Script:ProcessingErrors = [System.Collections.ArrayList]::new()
 $Script:HighRiskApplications = [System.Collections.ArrayList]::new()
 
 #region Helper Functions
+
+function Export-ToBlob {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$FilePath,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$BlobName,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$StorageAccount = $StorageAccountName,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$ContainerName = $StorageContainerName
+    )
+    
+    if (-not $StorageAccount) {
+        Write-Warning "No storage account specified. Skipping blob upload for $BlobName"
+        return $false
+    }
+    
+    try {
+        # Create storage context using managed identity
+        $Context = New-AzStorageContext -StorageAccountName $StorageAccount -UseConnectedAccount
+        
+        # Create folder structure with year/month
+        $DatePath = Get-Date -Format "yyyy/MM"
+        $BlobPath = "$DatePath/$BlobName"
+        
+        # Upload file to blob storage
+        $BlobResult = Set-AzStorageBlobContent -File $FilePath -Container $ContainerName -Blob $BlobPath -Context $Context -StandardBlobTier Cool -Force
+        
+        Write-Output "✓ Uploaded to blob storage: $($BlobResult.Name)"
+        return $true
+    }
+    catch {
+        Write-Warning "Failed to upload $BlobName to blob storage: $_"
+        return $false
+    }
+}
 
 function Test-RequiredPermissions {
     [CmdletBinding()]
@@ -700,6 +765,9 @@ Write-Output "WhatIf Mode: $($WhatIf.IsPresent)"
 Write-Output "Email Reports: $($SendEmailReport.IsPresent)"
 Write-Output "Include Active Apps: $($IncludeActiveApps.IsPresent)"
 Write-Output "Export Path: $ExportPath"
+if ($StorageAccountName) {
+    Write-Output "Blob Storage: $StorageAccountName/$StorageContainerName"
+}
 Write-Output "Start Time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 Write-Output "========================================="
 
@@ -714,11 +782,20 @@ try {
     
     $Context = Get-MgContext
     if ($null -eq $Context) {
-        try {
+        if ($UseManagedIdentity -or $StorageAccountName) {
+            # Use Managed Identity for authentication (required for blob storage)
+            Write-Output "Connecting with Azure Automation Managed Identity..."
             Connect-MgGraph -Identity -NoWelcome
+            
+            # Also connect to Azure for storage operations if needed
+            if ($StorageAccountName) {
+                Write-Output "Connecting to Azure for storage operations..."
+                Connect-AzAccount -Identity
+            }
         }
-        catch {
-            Write-Warning "Managed Identity connection failed, trying with required scopes..."
+        else {
+            # Fallback authentication (not recommended for production)
+            Write-Warning "Using fallback authentication. For production, use managed identity."
             Connect-MgGraph -Scopes "Application.Read.All","AuditLog.Read.All","Directory.Read.All","Mail.Send" -NoWelcome
         }
     }
@@ -766,6 +843,11 @@ Cannot proceed safely without proper permissions.
     if ($Script:UnusedApplications.Count -gt 0) {
         $UnusedFile = Join-Path $ExportPath "UnusedEnterpriseApps_$Timestamp.csv"
         $Script:UnusedApplications | Export-Csv -Path $UnusedFile -NoTypeInformation -Encoding UTF8
+        
+        # Upload to blob storage if configured
+        if ($StorageAccountName) {
+            Export-ToBlob -FilePath $UnusedFile -BlobName "UnusedApplications_$Timestamp.csv"
+        }
         Write-Output "Unused applications report: $UnusedFile"
     }
     
@@ -773,6 +855,11 @@ Cannot proceed safely without proper permissions.
     if ($IncludeActiveApps -and $Script:ActiveApplications.Count -gt 0) {
         $ActiveFile = Join-Path $ExportPath "ActiveEnterpriseApps_$Timestamp.csv"
         $Script:ActiveApplications | Export-Csv -Path $ActiveFile -NoTypeInformation -Encoding UTF8
+        
+        # Upload to blob storage if configured
+        if ($StorageAccountName) {
+            Export-ToBlob -FilePath $ActiveFile -BlobName "ActiveApplications_$Timestamp.csv"
+        }
         Write-Output "Active applications report: $ActiveFile"
     }
     
@@ -780,6 +867,11 @@ Cannot proceed safely without proper permissions.
     if ($Script:HighRiskApplications.Count -gt 0) {
         $HighRiskFile = Join-Path $ExportPath "HighRiskUnusedApps_$Timestamp.csv"
         $Script:HighRiskApplications | Export-Csv -Path $HighRiskFile -NoTypeInformation -Encoding UTF8
+        
+        # Upload to blob storage if configured
+        if ($StorageAccountName) {
+            Export-ToBlob -FilePath $HighRiskFile -BlobName "HighRiskApplications_$Timestamp.csv"
+        }
         Write-Output "High-risk applications report: $HighRiskFile"
     }
     
@@ -787,6 +879,11 @@ Cannot proceed safely without proper permissions.
     if ($Script:ProcessingErrors.Count -gt 0) {
         $ErrorFile = Join-Path $ExportPath "ProcessingErrors_$Timestamp.csv"
         $Script:ProcessingErrors | Export-Csv -Path $ErrorFile -NoTypeInformation -Encoding UTF8
+        
+        # Upload to blob storage if configured
+        if ($StorageAccountName) {
+            Export-ToBlob -FilePath $ErrorFile -BlobName "ProcessingErrors_$Timestamp.csv"
+        }
         Write-Output "Processing errors report: $ErrorFile"
     }
     
@@ -812,6 +909,11 @@ Cannot proceed safely without proper permissions.
     
     $SummaryFile = Join-Path $ExportPath "EnterpriseAppSummary_$Timestamp.csv"
     $SummaryData | Export-Csv -Path $SummaryFile -NoTypeInformation -Encoding UTF8
+    
+    # Upload summary to blob storage if configured
+    if ($StorageAccountName) {
+        Export-ToBlob -FilePath $SummaryFile -BlobName "UsageMonitorSummary_$Timestamp.csv"
+    }
     Write-Output "Summary report: $SummaryFile"
     
     # Send email report to administrators
@@ -841,6 +943,9 @@ Cannot proceed safely without proper permissions.
     Write-Output "Processing Errors: $($Script:ProcessingErrors.Count)"
     Write-Output "Mode: $(if ($WhatIf) { 'Simulation (WhatIf)' } else { 'Production' })"
     Write-Output "Reports saved to: $ExportPath"
+    if ($StorageAccountName) {
+        Write-Output "Reports uploaded to blob storage: $StorageAccountName/$StorageContainerName"
+    }
     
     # Calculate potential savings
     $EstimatedMonthlySavings = $Script:UnusedApplications.Count * 15

@@ -20,6 +20,15 @@ param(
     [string]$ReportPath = ".\Reports",
     
     [Parameter(Mandatory = $false)]
+    [string]$StorageAccountName,
+    
+    [Parameter(Mandatory = $false)]
+    [string]$StorageContainerName = "permission-audit-reports",
+    
+    [Parameter(Mandatory = $false)]
+    [switch]$UseManagedIdentity = $true,
+    
+    [Parameter(Mandatory = $false)]
     [string]$NotificationEmailFrom = $env:NOTIFICATION_EMAIL_FROM,
     
     [Parameter(Mandatory = $false)]
@@ -77,6 +86,12 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Import Azure Storage modules for blob storage functionality
+if ($StorageAccountName) {
+    Import-Module Az.Storage -ErrorAction Stop
+    Import-Module Az.Accounts -ErrorAction Stop
+}
+
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host "Application Permission Auditor" -ForegroundColor Cyan
 Write-Host "Enterprise Security & Compliance Automation" -ForegroundColor Cyan
@@ -86,6 +101,47 @@ Write-Host "Report Path: $ReportPath" -ForegroundColor Yellow
 Write-Host "WhatIf Mode: $WhatIf" -ForegroundColor Yellow
 Write-Host "Include OAuth Consents: $IncludeOAuthConsents" -ForegroundColor Yellow
 Write-Host "==========================================" -ForegroundColor Cyan
+
+function Export-ToBlob {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$FilePath,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$BlobName,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$StorageAccount = $StorageAccountName,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$ContainerName = $StorageContainerName
+    )
+    
+    if (-not $StorageAccount) {
+        Write-Warning "No storage account specified. Skipping blob upload for $BlobName"
+        return $false
+    }
+    
+    try {
+        # Create storage context using managed identity
+        $Context = New-AzStorageContext -StorageAccountName $StorageAccount -UseConnectedAccount
+        
+        # Create folder structure with year/month
+        $DatePath = Get-Date -Format "yyyy/MM"
+        $BlobPath = "$DatePath/$BlobName"
+        
+        # Upload file to blob storage
+        $BlobResult = Set-AzStorageBlobContent -File $FilePath -Container $ContainerName -Blob $BlobPath -Context $Context -StandardBlobTier Cool -Force
+        
+        Write-Output "✓ Uploaded to blob storage: $($BlobResult.Name)"
+        return $true
+    }
+    catch {
+        Write-Warning "Failed to upload $BlobName to blob storage: $_"
+        return $false
+    }
+}
 
 function Test-RequiredPermissions {
     try {
@@ -154,7 +210,18 @@ function Connect-ToMicrosoftGraph {
     try {
         Write-Host "Connecting to Microsoft Graph..." -ForegroundColor Yellow
         
-        if ($ClientId -and $TenantId -and $ClientSecret) {
+        if ($UseManagedIdentity -or $StorageAccountName) {
+            # Use Managed Identity for authentication (required for blob storage)
+            Write-Host "Connecting with Azure Automation Managed Identity..." -ForegroundColor Yellow
+            Connect-MgGraph -Identity -NoWelcome
+            
+            # Also connect to Azure for storage operations if needed
+            if ($StorageAccountName) {
+                Write-Host "Connecting to Azure for storage operations..." -ForegroundColor Yellow
+                Connect-AzAccount -Identity
+            }
+        }
+        elseif ($ClientId -and $TenantId -and $ClientSecret) {
             # PSScriptAnalyzer: ConvertTo-SecureString with -AsPlainText is required for authentication
             # This is a standard Microsoft Graph authentication pattern
             $SecureSecret = ConvertTo-SecureString $ClientSecret -AsPlainText -Force  # nosemgrep
@@ -472,6 +539,11 @@ function Export-PermissionReports {
         $DetailedReportPath = Join-Path $ReportPath "Application-Permissions-Detailed-$Timestamp.csv"
         $PermissionData | Export-Csv -Path $DetailedReportPath -NoTypeInformation
         
+        # Upload to blob storage if configured
+        if ($StorageAccountName) {
+            Export-ToBlob -FilePath $DetailedReportPath -BlobName "Application-Permissions-Detailed-$Timestamp.csv"
+        }
+        
         # Application Summary Report
         $SummaryData = $PermissionData | Group-Object ApplicationName | ForEach-Object {
             $Permissions = $_.Group
@@ -506,12 +578,22 @@ function Export-PermissionReports {
         $SummaryReportPath = Join-Path $ReportPath "Application-Summary-$Timestamp.csv"
         $SummaryData | Export-Csv -Path $SummaryReportPath -NoTypeInformation
         
+        # Upload to blob storage if configured
+        if ($StorageAccountName) {
+            Export-ToBlob -FilePath $SummaryReportPath -BlobName "Application-Summary-$Timestamp.csv"
+        }
+        
         # High-Risk Permissions Report
         $HighRiskData = $PermissionData | Where-Object { $_.IsHighRisk -or $_.RiskLevel -in @("Critical", "High") } | 
             Sort-Object RiskLevel, ApplicationName
         
         $HighRiskReportPath = Join-Path $ReportPath "High-Risk-Permissions-$Timestamp.csv"
         $HighRiskData | Export-Csv -Path $HighRiskReportPath -NoTypeInformation
+        
+        # Upload to blob storage if configured
+        if ($StorageAccountName) {
+            Export-ToBlob -FilePath $HighRiskReportPath -BlobName "High-Risk-Permissions-$Timestamp.csv"
+        }
         
         # Executive Summary
         $ExecutiveSummaryData = @{

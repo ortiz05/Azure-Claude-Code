@@ -32,6 +32,15 @@ param(
     [string]$ReportPath = ".\Reports",
     
     [Parameter(Mandatory = $false)]
+    [string]$StorageAccountName,
+    
+    [Parameter(Mandatory = $false)]
+    [string]$StorageContainerName = "service-principal-reports",
+    
+    [Parameter(Mandatory = $false)]
+    [switch]$UseManagedIdentity = $true,
+    
+    [Parameter(Mandatory = $false)]
     [string]$NotificationEmailFrom = $env:NOTIFICATION_EMAIL_FROM,
     
     [Parameter(Mandatory = $false)]

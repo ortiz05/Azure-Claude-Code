@@ -24,7 +24,16 @@
     Array of application IDs or display names to exclude from analysis
     
 .PARAMETER ExportPath
-    Path where CSV reports will be saved
+    Path where CSV reports will be saved (DEPRECATED - use blob storage)
+    
+.PARAMETER StorageAccountName
+    Azure Storage Account name for report storage (required for blob storage)
+    
+.PARAMETER StorageContainerName
+    Azure Storage Container name for reports (default: certificate-monitor-reports)
+    
+.PARAMETER UseManagedIdentity
+    Use Azure Automation managed identity for authentication (recommended)
     
 .PARAMETER IncludeSoonToExpire
     Include certificates/secrets expiring within specified days (default: 30)
@@ -56,6 +65,15 @@ param(
     [string]$ExportPath = "C:\EnterpriseAppCertificateReports",
     
     [Parameter(Mandatory=$false)]
+    [string]$StorageAccountName,
+    
+    [Parameter(Mandatory=$false)]
+    [string]$StorageContainerName = "certificate-monitor-reports",
+    
+    [Parameter(Mandatory=$false)]
+    [switch]$UseManagedIdentity = $true,
+    
+    [Parameter(Mandatory=$false)]
     [switch]$IncludeSoonToExpire = $true,
     
     [Parameter(Mandatory=$false)]
@@ -70,6 +88,12 @@ Import-Module Microsoft.Graph.Authentication -ErrorAction Stop
 Import-Module Microsoft.Graph.Applications -ErrorAction Stop
 Import-Module Microsoft.Graph.Reports -ErrorAction Stop
 
+# Import Azure Storage modules for blob storage functionality
+if ($StorageAccountName) {
+    Import-Module Az.Storage -ErrorAction Stop
+    Import-Module Az.Accounts -ErrorAction Stop
+}
+
 # Initialize tracking collections
 $Script:CriticalRiskApplications = [System.Collections.ArrayList]::new()
 $Script:HighRiskApplications = [System.Collections.ArrayList]::new()
@@ -78,6 +102,47 @@ $Script:ProcessingErrors = [System.Collections.ArrayList]::new()
 $Script:AllAnalyzedApps = [System.Collections.ArrayList]::new()
 
 #region Helper Functions
+
+function Export-ToBlob {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$FilePath,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$BlobName,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$StorageAccount = $StorageAccountName,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$ContainerName = $StorageContainerName
+    )
+    
+    if (-not $StorageAccount) {
+        Write-Warning "No storage account specified. Skipping blob upload for $BlobName"
+        return $false
+    }
+    
+    try {
+        # Create storage context using managed identity
+        $Context = New-AzStorageContext -StorageAccountName $StorageAccount -UseConnectedAccount
+        
+        # Create folder structure with year/month
+        $DatePath = Get-Date -Format "yyyy/MM"
+        $BlobPath = "$DatePath/$BlobName"
+        
+        # Upload file to blob storage
+        $BlobResult = Set-AzStorageBlobContent -File $FilePath -Container $ContainerName -Blob $BlobPath -Context $Context -StandardBlobTier Cool -Force
+        
+        Write-Output "✓ Uploaded to blob storage: $($BlobResult.Name)"
+        return $true
+    }
+    catch {
+        Write-Warning "Failed to upload $BlobName to blob storage: $_"
+        return $false
+    }
+}
 
 function Test-RequiredPermissions {
     [CmdletBinding()]
@@ -937,6 +1002,9 @@ Write-Output "WhatIf Mode: $($WhatIf.IsPresent)"
 Write-Output "Include Soon-to-Expire: $($IncludeSoonToExpire.IsPresent)"
 Write-Output "Critical Alerts: $($SendCriticalAlerts.IsPresent)"
 Write-Output "Export Path: $ExportPath"
+if ($StorageAccountName) {
+    Write-Output "Blob Storage: $StorageAccountName/$StorageContainerName"
+}
 Write-Output "Start Time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 Write-Output "========================================="
 
@@ -951,11 +1019,20 @@ try {
     
     $Context = Get-MgContext
     if ($null -eq $Context) {
-        try {
+        if ($UseManagedIdentity -or $StorageAccountName) {
+            # Use Managed Identity for authentication (required for blob storage)
+            Write-Output "Connecting with Azure Automation Managed Identity..."
             Connect-MgGraph -Identity -NoWelcome
+            
+            # Also connect to Azure for storage operations if needed
+            if ($StorageAccountName) {
+                Write-Output "Connecting to Azure for storage operations..."
+                Connect-AzAccount -Identity
+            }
         }
-        catch {
-            Write-Warning "Managed Identity connection failed, trying with required scopes..."
+        else {
+            # Fallback authentication (not recommended for production)
+            Write-Warning "Using fallback authentication. For production, use managed identity."
             Connect-MgGraph -Scopes "Application.Read.All","AuditLog.Read.All","Directory.Read.All","Mail.Send" -NoWelcome
         }
     }
@@ -1010,6 +1087,11 @@ Cannot proceed safely without proper permissions.
         $CriticalFile = Join-Path $ExportPath "CriticalRiskApps_$Timestamp.csv"
         $Script:CriticalRiskApplications | Export-Csv -Path $CriticalFile -NoTypeInformation -Encoding UTF8
         Write-Output "Critical risk applications report: $CriticalFile"
+        
+        # Upload to blob storage if configured
+        if ($StorageAccountName) {
+            Export-ToBlob -FilePath $CriticalFile -BlobName "CriticalRiskApps_$Timestamp.csv"
+        }
     }
     
     # Export high risk applications
@@ -1017,6 +1099,11 @@ Cannot proceed safely without proper permissions.
         $HighRiskFile = Join-Path $ExportPath "HighRiskApps_$Timestamp.csv"
         $Script:HighRiskApplications | Export-Csv -Path $HighRiskFile -NoTypeInformation -Encoding UTF8
         Write-Output "High risk applications report: $HighRiskFile"
+        
+        # Upload to blob storage if configured
+        if ($StorageAccountName) {
+            Export-ToBlob -FilePath $HighRiskFile -BlobName "HighRiskApps_$Timestamp.csv"
+        }
     }
     
     # Export medium risk applications
@@ -1024,6 +1111,11 @@ Cannot proceed safely without proper permissions.
         $MediumRiskFile = Join-Path $ExportPath "MediumRiskApps_$Timestamp.csv"
         $Script:MediumRiskApplications | Export-Csv -Path $MediumRiskFile -NoTypeInformation -Encoding UTF8
         Write-Output "Medium risk applications report: $MediumRiskFile"
+        
+        # Upload to blob storage if configured
+        if ($StorageAccountName) {
+            Export-ToBlob -FilePath $MediumRiskFile -BlobName "MediumRiskApps_$Timestamp.csv"
+        }
     }
     
     # Export all analyzed applications
@@ -1031,6 +1123,11 @@ Cannot proceed safely without proper permissions.
         $AllAppsFile = Join-Path $ExportPath "AllAnalyzedApps_$Timestamp.csv"
         $Script:AllAnalyzedApps | Export-Csv -Path $AllAppsFile -NoTypeInformation -Encoding UTF8
         Write-Output "Complete application analysis report: $AllAppsFile"
+        
+        # Upload to blob storage if configured
+        if ($StorageAccountName) {
+            Export-ToBlob -FilePath $AllAppsFile -BlobName "AllAnalyzedApps_$Timestamp.csv"
+        }
     }
     
     # Export processing errors
@@ -1038,6 +1135,11 @@ Cannot proceed safely without proper permissions.
         $ErrorFile = Join-Path $ExportPath "ProcessingErrors_$Timestamp.csv"
         $Script:ProcessingErrors | Export-Csv -Path $ErrorFile -NoTypeInformation -Encoding UTF8
         Write-Output "Processing errors report: $ErrorFile"
+        
+        # Upload to blob storage if configured
+        if ($StorageAccountName) {
+            Export-ToBlob -FilePath $ErrorFile -BlobName "ProcessingErrors_$Timestamp.csv"
+        }
     }
     
     # Generate summary CSV
@@ -1061,6 +1163,11 @@ Cannot proceed safely without proper permissions.
     $SummaryFile = Join-Path $ExportPath "CertificateMonitorSummary_$Timestamp.csv"
     $SummaryData | Export-Csv -Path $SummaryFile -NoTypeInformation -Encoding UTF8
     Write-Output "Summary report: $SummaryFile"
+    
+    # Upload summary to blob storage if configured
+    if ($StorageAccountName) {
+        Export-ToBlob -FilePath $SummaryFile -BlobName "CertificateMonitorSummary_$Timestamp.csv"
+    }
     
     # Send detailed email report to IT administrators
     if ($ITAdminEmails.Count -gt 0) {
@@ -1086,6 +1193,9 @@ Cannot proceed safely without proper permissions.
     Write-Output "Processing Errors: $($Script:ProcessingErrors.Count)"
     Write-Output "Mode: $(if ($WhatIf) { 'Simulation (WhatIf)' } else { 'Production' })"
     Write-Output "Reports saved to: $ExportPath"
+    if ($StorageAccountName) {
+        Write-Output "Reports uploaded to blob storage: $StorageAccountName/$StorageContainerName"
+    }
     Write-Output "End Time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
     Write-Output "========================================="
     
@@ -1130,6 +1240,11 @@ Script Parameters:
     
     $ErrorDetails | Out-File -FilePath $ErrorFile -Encoding UTF8
     Write-Output "Error details saved to: $ErrorFile"
+    
+    # Upload error to blob storage if configured
+    if ($StorageAccountName) {
+        Export-ToBlob -FilePath $ErrorFile -BlobName "CriticalError_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt"
+    }
     
     throw
 }
