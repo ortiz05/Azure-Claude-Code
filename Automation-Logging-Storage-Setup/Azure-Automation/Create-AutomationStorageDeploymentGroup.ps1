@@ -14,21 +14,21 @@
 
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true, HelpMessage = "Azure AD Tenant ID (REQUIRED to avoid authentication issues)")]
-    [ValidatePattern("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")]
-    [string]$TenantId,
-    
-    [Parameter(Mandatory = $true, HelpMessage = "Azure subscription ID where the storage will be deployed")]
+    [Parameter(Mandatory = $true, HelpMessage = "Azure subscription ID where the automation will be deployed")]
     [ValidatePattern("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")]
     [string]$SubscriptionId,
     
-    [Parameter(Mandatory = $true, HelpMessage = "Resource group name where Azure Storage will be deployed")]
-    [ValidateLength(1, 90)]
-    [string]$ResourceGroupName,
+    [Parameter(Mandatory = $true, HelpMessage = "Azure AD tenant ID (required for targeted authentication - prevents multi-tenant authentication issues)")]
+    [ValidatePattern("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")]
+    [string]$TenantId,
     
     [Parameter(Mandatory = $false, HelpMessage = "Azure AD group name for Automation Storage permissions")]
     [ValidateLength(1, 256)]
     [string]$GroupName = "AutomationStorage-Deployment-Users",
+    
+    [Parameter(Mandatory = $true, HelpMessage = "Resource group name where Azure Storage will be deployed")]
+    [ValidateLength(1, 90)]
+    [string]$ResourceGroupName,
     
     [Parameter(Mandatory = $false, HelpMessage = "Group description")]
     [string]$GroupDescription = "Automation Storage deployment permissions for Azure Storage infrastructure management",
@@ -43,39 +43,58 @@ $ErrorActionPreference = "Stop"
 function Test-PowerShellCompatibility {
     Write-Host "Validating PowerShell compatibility..." -ForegroundColor Yellow
     
+    # Check PowerShell version
     $PSVersion = $PSVersionTable.PSVersion
     if ($PSVersion.Major -lt 7) {
-        Write-Error "PowerShell 7.0 or later is required. Current version: $($PSVersion.ToString())"
+        Write-Error @"
+PowerShell 7.0 or later is required for this script.
+Current version: $($PSVersion.ToString())
+Please install PowerShell 7 from: https://github.com/PowerShell/PowerShell/releases
+"@
         return $false
     }
     Write-Host "✓ PowerShell version: $($PSVersion.ToString())" -ForegroundColor Green
     
+    # Check required Azure modules
     $RequiredModules = @('Az.Accounts', 'Az.Resources')
     $MissingModules = @()
     
     foreach ($Module in $RequiredModules) {
-        $InstalledModule = Get-Module -ListAvailable -Name $Module | 
-                          Sort-Object Version -Descending | 
-                          Select-Object -First 1
-        
-        if (-not $InstalledModule) {
-            $MissingModules += $Module
-            Write-Host "✗ Missing: $Module" -ForegroundColor Red
+        $ModuleInfo = Get-Module -Name $Module -ListAvailable | Sort-Object Version -Descending | Select-Object -First 1
+        if ($ModuleInfo) {
+            Write-Host "✓ $Module version: $($ModuleInfo.Version)" -ForegroundColor Green
         } else {
-            Write-Host "✓ $Module version: $($InstalledModule.Version)" -ForegroundColor Green
+            $MissingModules += $Module
+            Write-Warning "✗ Missing module: $Module"
         }
     }
     
     if ($MissingModules.Count -gt 0) {
         Write-Error @"
-Missing required modules. Install them using:
-$($MissingModules | ForEach-Object { "Install-Module -Name $_ -Scope CurrentUser -Force" } | Out-String)
+Missing required Azure PowerShell modules: $($MissingModules -join ', ')
+Install missing modules with:
+Install-Module -Name $($MissingModules -join ', ') -Scope CurrentUser -Force
+"@
+        return $false
+    }
+    
+    # Check if running in Windows PowerShell (not supported)
+    if ($PSVersionTable.PSEdition -eq 'Desktop') {
+        Write-Error @"
+Windows PowerShell (Desktop edition) is not supported.
+Please use PowerShell 7+ (Core edition).
+Download from: https://github.com/PowerShell/PowerShell/releases
 "@
         return $false
     }
     
     Write-Host "✓ PowerShell compatibility validation passed" -ForegroundColor Green
     return $true
+}
+
+# Validate compatibility before proceeding
+if (-not (Test-PowerShellCompatibility)) {
+    exit 1
 }
 
 Write-Host @"
@@ -85,222 +104,335 @@ Azure Infrastructure Permissions
 =========================================
 "@ -ForegroundColor Cyan
 
-Write-Host "Group Name: $GroupName" -ForegroundColor Yellow
-Write-Host "Resource Group: $ResourceGroupName" -ForegroundColor Yellow
 Write-Host "Subscription: $SubscriptionId" -ForegroundColor Yellow
-Write-Host "Tenant: $TenantId" -ForegroundColor Yellow
+Write-Host "Tenant ID: $TenantId" -ForegroundColor Yellow
+Write-Host "Resource Group: $ResourceGroupName" -ForegroundColor Yellow
+Write-Host "Group Name: $GroupName" -ForegroundColor Yellow
 Write-Host "WhatIf Mode: $WhatIf" -ForegroundColor Yellow
-Write-Host "=========================================" -ForegroundColor Cyan
+Write-Host "========================================`n" -ForegroundColor Cyan
 
-# Run compatibility checks
-if (-not (Test-PowerShellCompatibility)) {
-    throw "PowerShell compatibility check failed"
-}
+# No Microsoft Graph permissions required for Automation Storage deployment
+# This script only assigns Azure RBAC roles for storage infrastructure management
 
-if ($WhatIf) {
-    Write-Host ""
-    Write-Host "🔍 WHATIF MODE - No changes will be made" -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "Would create the following resources:" -ForegroundColor Yellow
-    Write-Host "• Azure AD Group: $GroupName" -ForegroundColor Green
-    Write-Host "• Group Description: $GroupDescription" -ForegroundColor Green
-    Write-Host "• RBAC Roles on Resource Group '$ResourceGroupName':" -ForegroundColor Green
-    Write-Host "  - Storage Account Contributor (manage storage accounts)" -ForegroundColor Gray
-    Write-Host "  - Storage Blob Data Contributor (manage containers and blobs)" -ForegroundColor Gray
-    Write-Host "  - Reader (view resource group contents)" -ForegroundColor Gray
-    Write-Host ""
-    Write-Host "Next steps after group creation:" -ForegroundColor Yellow
-    Write-Host "1. Add authorized users to the group" -ForegroundColor Gray
-    Write-Host "2. Run Grant-AutomationStoragePermissions.ps1 for managed identity access" -ForegroundColor Gray
-    Write-Host "3. Run Deploy-AutomationStorageSetup.ps1 to create storage infrastructure" -ForegroundColor Gray
-    Write-Host ""
-    Write-Host "To create these resources, re-run without -WhatIf parameter" -ForegroundColor Yellow
-    exit 0
-}
+# Required Azure RBAC roles for Automation Storage deployment (minimal permissions)
+$RequiredAzureRoles = @(
+    @{
+        Name = "Storage Account Contributor"
+        Reason = "Create and manage storage accounts for automation logging"
+        Required = $true
+    },
+    @{
+        Name = "Storage Blob Data Contributor"
+        Reason = "Manage containers and blobs for automation reports and logs"
+        Required = $true
+    }
+)
 
-try {
-    # Connect to Azure
-    Write-Host ""
-    Write-Host "Connecting to Azure..." -ForegroundColor Yellow
-    
-    $Context = Get-AzContext
-    if (-not $Context -or $Context.Tenant.Id -ne $TenantId) {
-        Write-Host "Please authenticate with an account that has:" -ForegroundColor Yellow
-        Write-Host "  - User Administrator or Global Administrator (to create groups)" -ForegroundColor Gray
-        Write-Host "  - Owner or User Access Administrator (for Azure RBAC)" -ForegroundColor Gray
-        Connect-AzAccount -SubscriptionId $SubscriptionId -TenantId $TenantId
-    }
-    
-    $Context = Get-AzContext
-    if ($Context.Subscription.Id -ne $SubscriptionId) {
-        Set-AzContext -SubscriptionId $SubscriptionId
-    }
-    
-    Write-Host "✓ Connected to Azure" -ForegroundColor Green
-    Write-Host "  Account: $($Context.Account.Id)" -ForegroundColor Gray
-    Write-Host "  Subscription: $($Context.Subscription.Name)" -ForegroundColor Gray
-    Write-Host "  Tenant: $($Context.Tenant.Id)" -ForegroundColor Gray
-    
-    # Validate resource group exists
-    Write-Host ""
-    Write-Host "Validating target resource group..." -ForegroundColor Yellow
-    $TargetResourceGroup = Get-AzResourceGroup -Name $ResourceGroupName -ErrorAction SilentlyContinue
-    
-    if (-not $TargetResourceGroup) {
-        throw "Resource group '$ResourceGroupName' not found. Please create it first or specify an existing resource group."
-    }
-    
-    Write-Host "✓ Target resource group exists: $ResourceGroupName" -ForegroundColor Green
-    Write-Host "  Location: $($TargetResourceGroup.Location)" -ForegroundColor Gray
-    Write-Host "  Resource Group ID: $($TargetResourceGroup.ResourceId)" -ForegroundColor Gray
-    
-    # Check if group already exists
-    Write-Host ""
-    Write-Host "Checking if Azure AD group exists..." -ForegroundColor Yellow
-    $ExistingGroup = Get-AzADGroup -DisplayName $GroupName -ErrorAction SilentlyContinue
-    
-    if ($ExistingGroup) {
-        Write-Host "✓ Group already exists: $GroupName" -ForegroundColor Green
-        Write-Host "  Object ID: $($ExistingGroup.Id)" -ForegroundColor Gray
-        Write-Host "  Description: $($ExistingGroup.Description)" -ForegroundColor Gray
-        $DeploymentGroup = $ExistingGroup
-    } else {
-        # Create Azure AD group
-        Write-Host ""
-        Write-Host "Creating Azure AD deployment group..." -ForegroundColor Yellow
+function Connect-ToAzure {
+    try {
+        Write-Host "Connecting to Azure..." -ForegroundColor Yellow
         
-        $GroupParams = @{
-            DisplayName = $GroupName
-            Description = $GroupDescription
-            SecurityEnabled = $true
-            MailEnabled = $false
+        $Context = Get-AzContext
+        $NeedsConnection = $false
+        
+        if (-not $Context) {
+            $NeedsConnection = $true
+        } elseif ($Context.Subscription.Id -ne $SubscriptionId) {
+            $NeedsConnection = $true
+        } elseif ($Context.Tenant.Id -ne $TenantId) {
+            $NeedsConnection = $true
         }
         
-        $DeploymentGroup = New-AzADGroup @GroupParams
-        Write-Host "✓ Azure AD group created successfully" -ForegroundColor Green
-        Write-Host "  Group Name: $($DeploymentGroup.DisplayName)" -ForegroundColor Gray
-        Write-Host "  Object ID: $($DeploymentGroup.Id)" -ForegroundColor Gray
-        
-        # Wait for group propagation
-        Write-Host "⏳ Waiting for group propagation (30 seconds)..." -ForegroundColor Yellow
-        Start-Sleep -Seconds 30
-    }
-    
-    # Define required RBAC roles for storage deployment
-    $RequiredRoles = @(
-        @{
-            Name = "Storage Account Contributor"
-            Description = "Manage storage accounts and their configuration"
-            Scope = $TargetResourceGroup.ResourceId
-        },
-        @{
-            Name = "Storage Blob Data Contributor" 
-            Description = "Read, write, and delete Azure Storage containers and blobs"
-            Scope = $TargetResourceGroup.ResourceId
-        },
-        @{
-            Name = "Reader"
-            Description = "View all resources but not make any changes"
-            Scope = $TargetResourceGroup.ResourceId
+        if ($NeedsConnection) {
+            Write-Host "Please authenticate with an account that has:" -ForegroundColor Yellow
+            Write-Host "  - User Administrator or Global Administrator (to create groups)" -ForegroundColor Gray
+            Write-Host "  - Owner or User Access Administrator (for Azure RBAC)" -ForegroundColor Gray
+            Write-Host "  - Connecting to tenant: $TenantId" -ForegroundColor Gray
+            
+            Write-Host "  - Using default interactive authentication" -ForegroundColor Gray
+            Connect-AzAccount -SubscriptionId $SubscriptionId -TenantId $TenantId
         }
+        
+        $Context = Get-AzContext
+        Write-Host "✓ Connected to Azure subscription: $SubscriptionId" -ForegroundColor Green
+        Write-Host "  Tenant: $($Context.Tenant.Id)" -ForegroundColor Gray
+        return $true
+        
+    } catch {
+        Write-Error "Failed to connect to Azure: $($_.Exception.Message)"
+        return $false
+    }
+}
+
+function Test-RequiredPermissions {
+    try {
+        Write-Host "Validating permissions..." -ForegroundColor Yellow
+        
+        # Test Azure AD permissions (group creation)
+        try {
+            Get-AzADGroup -First 1 -ErrorAction Stop | Out-Null
+            Write-Host "✓ Azure AD group management access confirmed" -ForegroundColor Green
+        } catch {
+            Write-Warning "May not have permissions to create Azure AD groups"
+            Write-Host "Required role: User Administrator or Global Administrator" -ForegroundColor Yellow
+        }
+        
+        return $true
+        
+    } catch {
+        Write-Error "Permission validation failed: $($_.Exception.Message)"
+        return $false
+    }
+}
+
+function New-AutomationStorageDeploymentGroup {
+    try {
+        Write-Host "Creating Azure AD security group for Automation Storage deployment..." -ForegroundColor Yellow
+        
+        if ($WhatIf) {
+            Write-Host "[WHATIF] Would create group: $GroupName" -ForegroundColor Yellow
+            return @{ Id = "whatif-group-id"; DisplayName = $GroupName }
+        }
+        
+        # Check if group already exists
+        $ExistingGroup = Get-AzADGroup -DisplayName $GroupName -ErrorAction SilentlyContinue
+        if ($ExistingGroup) {
+            Write-Host "✓ Group already exists: $GroupName" -ForegroundColor Green
+            return $ExistingGroup
+        }
+        
+        # Create new security group
+        # Generate mail nickname from group name (remove spaces and special chars, max 64 chars)
+        $MailNickname = ($GroupName -replace '[^a-zA-Z0-9]', '').Substring(0, [Math]::Min(64, ($GroupName -replace '[^a-zA-Z0-9]', '').Length))
+        
+        $Group = New-AzADGroup `
+            -DisplayName $GroupName `
+            -Description $GroupDescription `
+            -MailNickname $MailNickname `
+            -SecurityEnabled `
+            -MailEnabled:$false
+        
+        Write-Host "✓ Created Azure AD group: $GroupName" -ForegroundColor Green
+        Write-Host "  Group ID: $($Group.Id)" -ForegroundColor Gray
+        
+        # Wait for Azure AD group to propagate (eventual consistency)
+        Write-Host "  Waiting for group to propagate in Azure AD..." -ForegroundColor Yellow
+        $MaxWaitTime = 120 # Maximum wait time in seconds
+        $WaitInterval = 5  # Check every 5 seconds
+        $ElapsedTime = 0
+        
+        do {
+            Start-Sleep -Seconds $WaitInterval
+            $ElapsedTime += $WaitInterval
+            
+            # Try to retrieve the group to verify it's fully propagated
+            $VerifyGroup = Get-AzADGroup -ObjectId $Group.Id -ErrorAction SilentlyContinue
+            if ($VerifyGroup) {
+                Write-Host "  ✓ Group propagation confirmed (waited $ElapsedTime seconds)" -ForegroundColor Green
+                break
+            }
+            
+            Write-Host "  Still waiting... ($ElapsedTime/$MaxWaitTime seconds)" -ForegroundColor Gray
+            
+        } while ($ElapsedTime -lt $MaxWaitTime)
+        
+        if ($ElapsedTime -ge $MaxWaitTime) {
+            Write-Warning "Group may not be fully propagated yet. Manual verification recommended."
+        }
+        
+        return $Group
+        
+    } catch {
+        Write-Error "Failed to create group: $($_.Exception.Message)"
+        return $null
+    }
+}
+
+function Set-ResourceGroupPermissions {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Group
     )
     
-    # Assign RBAC roles
-    Write-Host ""
-    Write-Host "Assigning RBAC roles to deployment group..." -ForegroundColor Yellow
-    
-    $SuccessfulAssignments = 0
-    $FailedAssignments = 0
-    
-    foreach ($Role in $RequiredRoles) {
-        Write-Host "  Assigning role: $($Role.Name)" -ForegroundColor Cyan
+    try {
+        Write-Host "Assigning Azure RBAC permissions..." -ForegroundColor Yellow
         
-        try {
+        # Define the resource group scope
+        $ResourceGroupScope = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName"
+        
+        # Verify resource group exists
+        $ResourceGroup = Get-AzResourceGroup -Name $ResourceGroupName -ErrorAction SilentlyContinue
+        if (-not $ResourceGroup) {
+            Write-Host "Resource group '$ResourceGroupName' does not exist. Creating it..." -ForegroundColor Yellow
+            
+            if ($WhatIf) {
+                Write-Host "[WHATIF] Would create resource group: $ResourceGroupName" -ForegroundColor Yellow
+            } else {
+                # Prompt for location since we need to create the RG
+                $Location = Read-Host "Enter Azure region for resource group (e.g., 'East US 2')"
+                New-AzResourceGroup -Name $ResourceGroupName -Location $Location
+                Write-Host "✓ Created resource group: $ResourceGroupName" -ForegroundColor Green
+            }
+        }
+        
+        # Assign each required Azure RBAC role
+        foreach ($Role in $RequiredAzureRoles) {
+            if (-not $Role.Required) {
+                Write-Host "  Skipping role: $($Role.Name) (not required for this configuration)" -ForegroundColor Gray
+                continue
+            }
+            
+            Write-Host "  Assigning role: $($Role.Name)" -ForegroundColor Gray
+            Write-Host "    Purpose: $($Role.Reason)" -ForegroundColor DarkGray
+            
+            if ($WhatIf) {
+                Write-Host "  [WHATIF] Would assign role: $($Role.Name)" -ForegroundColor Yellow
+                continue
+            }
+            
             # Check if role assignment already exists
-            $ExistingAssignment = Get-AzRoleAssignment -ObjectId $DeploymentGroup.Id -RoleDefinitionName $Role.Name -Scope $Role.Scope -ErrorAction SilentlyContinue
+            $ExistingAssignment = Get-AzRoleAssignment `
+                -ObjectId $Group.Id `
+                -RoleDefinitionName $Role.Name `
+                -Scope $ResourceGroupScope `
+                -ErrorAction SilentlyContinue
             
             if ($ExistingAssignment) {
-                Write-Host "    ✓ Role already assigned: $($Role.Name)" -ForegroundColor Green
-                $SuccessfulAssignments++
+                Write-Host "  ✓ Role already assigned: $($Role.Name)" -ForegroundColor Green
             } else {
-                # Assign the role with retry logic for timing issues
+                # Retry role assignment with exponential backoff for timing issues
                 $MaxRetries = 3
                 $RetryCount = 0
-                $RoleAssigned = $false
+                $AssignmentSucceeded = $false
                 
                 do {
                     try {
                         if ($RetryCount -gt 0) {
-                            $WaitTime = [math]::Pow(2, $RetryCount) * 5
-                            Write-Host "    ⏳ Retrying in $WaitTime seconds..." -ForegroundColor Yellow
+                            $WaitTime = [math]::Pow(2, $RetryCount) * 5  # 5, 10, 20 seconds
+                            Write-Host "    Retrying in $WaitTime seconds (attempt $($RetryCount + 1)/$($MaxRetries + 1))..." -ForegroundColor Gray
                             Start-Sleep -Seconds $WaitTime
                         }
                         
-                        New-AzRoleAssignment -ObjectId $DeploymentGroup.Id -RoleDefinitionName $Role.Name -Scope $Role.Scope -ErrorAction Stop | Out-Null
-                        Write-Host "    ✓ Role assigned successfully: $($Role.Name)" -ForegroundColor Green
-                        $SuccessfulAssignments++
-                        $RoleAssigned = $true
+                        New-AzRoleAssignment `
+                            -ObjectId $Group.Id `
+                            -RoleDefinitionName $Role.Name `
+                            -Scope $ResourceGroupScope
+                        
+                        Write-Host "  ✓ Assigned role: $($Role.Name)" -ForegroundColor Green
+                        $AssignmentSucceeded = $true
                         break
-                    }
-                    catch {
+                        
+                    } catch {
                         $RetryCount++
                         if ($RetryCount -gt $MaxRetries) {
-                            Write-Warning "    Failed to assign role $($Role.Name): $_"
-                            $FailedAssignments++
-                            break
+                            Write-Warning "  Failed to assign role $($Role.Name) after $($MaxRetries + 1) attempts: $($_.Exception.Message)"
+                            if ($_.Exception.Message -like "*BadRequest*") {
+                                Write-Host "    This may be due to timing issues. You can manually assign the role later:" -ForegroundColor Yellow
+                                Write-Host "    New-AzRoleAssignment -ObjectId $($Group.Id) -RoleDefinitionName '$($Role.Name)' -Scope '$ResourceGroupScope'" -ForegroundColor Gray
+                            }
+                        } else {
+                            Write-Host "    Attempt $($RetryCount) failed: $($_.Exception.Message)" -ForegroundColor Gray
                         }
                     }
-                } while ($RetryCount -le $MaxRetries -and -not $RoleAssigned)
+                } while ($RetryCount -le $MaxRetries -and -not $AssignmentSucceeded)
             }
         }
-        catch {
-            Write-Warning "  Failed to assign role $($Role.Name): $_"
-            $FailedAssignments++
-        }
+        
+        Write-Host "✓ Azure RBAC role assignments completed" -ForegroundColor Green
+        return $true
+        
+    } catch {
+        Write-Error "Failed to assign Azure RBAC permissions: $($_.Exception.Message)"
+        return $false
     }
+}
+
+function Show-NextSteps {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Group
+    )
     
-    # Summary
-    Write-Host ""
-    Write-Host "=========================================" -ForegroundColor Cyan
-    Write-Host "DEPLOYMENT GROUP SETUP SUMMARY" -ForegroundColor Cyan
-    Write-Host "=========================================" -ForegroundColor Cyan
-    
-    Write-Host "✅ Azure AD Group: $($DeploymentGroup.DisplayName)" -ForegroundColor Green
-    Write-Host "  Object ID: $($DeploymentGroup.Id)" -ForegroundColor Gray
-    Write-Host "  Description: $($DeploymentGroup.Description)" -ForegroundColor Gray
-    
-    Write-Host ""
-    Write-Host "📋 RBAC Role Assignments:" -ForegroundColor Cyan
-    Write-Host "  ✓ Successful: $SuccessfulAssignments roles" -ForegroundColor Green
-    if ($FailedAssignments -gt 0) {
-        Write-Host "  ✗ Failed: $FailedAssignments roles" -ForegroundColor Red
-    }
-    Write-Host "  Target Scope: $ResourceGroupName" -ForegroundColor Gray
-    
-    Write-Host ""
-    Write-Host "🔧 Next Steps:" -ForegroundColor Cyan
+    Write-Host "`n🔧 Next Steps:" -ForegroundColor Cyan
     Write-Host "1. Add authorized users to the group:" -ForegroundColor White
     Write-Host "   Azure Portal → Azure AD → Groups → $GroupName → Members" -ForegroundColor Gray
-    Write-Host ""
+    Write-Host "" 
     Write-Host "2. Grant automation managed identity permissions:" -ForegroundColor White
     Write-Host "   ./Grant-AutomationStoragePermissions.ps1 \`" -ForegroundColor Gray
     Write-Host "     -ManagedIdentityObjectId 'your-managed-identity-id' \`" -ForegroundColor Gray
     Write-Host "     -TenantId '$TenantId'" -ForegroundColor Gray
     Write-Host ""
     Write-Host "3. Deploy the storage infrastructure:" -ForegroundColor White
-    Write-Host "   ./Deploy-AutomationStorageSetup.ps1 \`" -ForegroundColor Gray
+    Write-Host "   ./Deploy-AutomationLoggingStorageSetup.ps1 \`" -ForegroundColor Gray
     Write-Host "     -SubscriptionId '$SubscriptionId' \`" -ForegroundColor Gray
     Write-Host "     -TenantId '$TenantId' \`" -ForegroundColor Gray
     Write-Host "     -ResourceGroupName '$ResourceGroupName'" -ForegroundColor Gray
+}
+
+function Show-GroupSummary {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Group
+    )
     
-    if ($FailedAssignments -eq 0) {
-        Write-Host ""
-        Write-Host "🎉 Deployment group setup completed successfully!" -ForegroundColor Green
-        Write-Host "The group is ready for Automation Storage deployment." -ForegroundColor Green
-    } else {
-        Write-Warning "Some role assignments failed. Please review and retry manually if needed."
-        exit 1
+    Write-Host "`n=========================================" -ForegroundColor Cyan
+    Write-Host " DEPLOYMENT GROUP SETUP SUMMARY" -ForegroundColor Cyan
+    Write-Host "=========================================" -ForegroundColor Cyan
+    
+    if ($WhatIf) {
+        Write-Host "✓ WhatIf mode - No changes were made" -ForegroundColor Green
+        return
     }
+    
+    Write-Host "`n✅ Azure AD Group: $($Group.DisplayName)" -ForegroundColor Green
+    Write-Host "  Object ID: $($Group.Id)" -ForegroundColor Gray
+    Write-Host "  Description: $($Group.Description)" -ForegroundColor Gray
+    
+    Write-Host "`n📋 RBAC Role Assignments:" -ForegroundColor Cyan
+    Write-Host "  Target Scope: $ResourceGroupName" -ForegroundColor Gray
+    foreach ($Role in $RequiredAzureRoles) {
+        if ($Role.Required) {
+            Write-Host "  ✓ $($Role.Name)" -ForegroundColor Green
+            Write-Host "    Purpose: $($Role.Reason)" -ForegroundColor Gray
+        }
+    }
+    
+    Write-Host "`n🎯 Purpose:" -ForegroundColor Cyan
+    Write-Host "  This group provides least-privilege access for Automation Storage deployment" -ForegroundColor White
+    Write-Host "  Members can create and manage Azure Storage infrastructure for automation logging" -ForegroundColor White
+}
+
+
+# Main execution
+try {
+    # Step 1: Connect to Azure
+    if (-not (Connect-ToAzure)) {
+        throw "Failed to connect to Azure"
+    }
+    
+    # Step 2: Validate permissions
+    if (-not (Test-RequiredPermissions)) {
+        Write-Warning "Permission validation failed. Continuing anyway..."
+    }
+    
+    # Step 3: Create the deployment group
+    $Group = New-AutomationStorageDeploymentGroup
+    if (-not $Group) {
+        throw "Failed to create deployment group"
+    }
+    
+    # Step 4: Assign Azure RBAC permissions
+    $PermissionsSet = Set-ResourceGroupPermissions -Group $Group
+    if (-not $PermissionsSet -and -not $WhatIf) {
+        Write-Warning "Failed to assign some Azure RBAC permissions. Check troubleshooting section."
+    }
+    
+    # Step 5: Show summary and next steps
+    Show-GroupSummary -Group $Group
+    Show-NextSteps -Group $Group
+    
+    Write-Host "`n🎉 Automation Storage deployment group setup completed!" -ForegroundColor Green
+    Write-Host "The group is ready for Automation Storage deployment." -ForegroundColor Green
     
 } catch {
     Write-Error "Deployment group setup failed: $_"
@@ -309,6 +441,6 @@ try {
     Write-Host "1. Ensure you have User Administrator or Global Administrator role" -ForegroundColor Gray
     Write-Host "2. Verify you have Owner or User Access Administrator on the resource group" -ForegroundColor Gray
     Write-Host "3. Check that the resource group exists and you have access" -ForegroundColor Gray
-    Write-Host "4. Ensure you're using an organizational account (not personal MSA)" -ForegroundColor Gray
+    Write-Host "4. Ensure you are using an organizational account, not personal MSA" -ForegroundColor Gray
     exit 1
 }
