@@ -14,7 +14,7 @@
 
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true, HelpMessage = "Azure subscription ID where the automation will be deployed")]
+    [Parameter(Mandatory = $true, HelpMessage = "Azure subscription ID where the automation storage will be deployed")]
     [ValidatePattern("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")]
     [string]$SubscriptionId,
     
@@ -22,13 +22,13 @@ param(
     [ValidatePattern("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")]
     [string]$TenantId,
     
-    [Parameter(Mandatory = $false, HelpMessage = "Azure AD group name for Automation Storage permissions")]
-    [ValidateLength(1, 256)]
-    [string]$GroupName = "AutomationStorage-Deployment-Users",
-    
     [Parameter(Mandatory = $true, HelpMessage = "Resource group name where Azure Storage will be deployed")]
     [ValidateLength(1, 90)]
     [string]$ResourceGroupName,
+    
+    [Parameter(Mandatory = $false, HelpMessage = "Azure AD group name for Automation Storage permissions")]
+    [ValidateLength(1, 256)]
+    [string]$GroupName = "AutomationStorage-Deployment-Users",
     
     [Parameter(Mandatory = $false, HelpMessage = "Group description")]
     [string]$GroupDescription = "Automation Storage deployment permissions for Azure Storage infrastructure management",
@@ -110,9 +110,6 @@ Write-Host "Resource Group: $ResourceGroupName" -ForegroundColor Yellow
 Write-Host "Group Name: $GroupName" -ForegroundColor Yellow
 Write-Host "WhatIf Mode: $WhatIf" -ForegroundColor Yellow
 Write-Host "========================================`n" -ForegroundColor Cyan
-
-# No Microsoft Graph permissions required for Automation Storage deployment
-# This script only assigns Azure RBAC roles for storage infrastructure management
 
 # Required Azure RBAC roles for Automation Storage deployment (minimal permissions)
 $RequiredAzureRoles = @(
@@ -347,49 +344,29 @@ function Set-ResourceGroupPermissions {
     }
 }
 
-function Show-NextSteps {
-    param(
-        [Parameter(Mandatory = $true)]
-        $Group
-    )
-    
-    Write-Host "`n🔧 Next Steps:" -ForegroundColor Cyan
-    Write-Host "1. Add authorized users to the group:" -ForegroundColor White
-    Write-Host "   Azure Portal → Azure AD → Groups → $GroupName → Members" -ForegroundColor Gray
-    Write-Host "" 
-    Write-Host "2. Grant automation managed identity permissions:" -ForegroundColor White
-    Write-Host "   ./Grant-AutomationStoragePermissions.ps1 \`" -ForegroundColor Gray
-    Write-Host "     -ManagedIdentityObjectId 'your-managed-identity-id' \`" -ForegroundColor Gray
-    Write-Host "     -TenantId '$TenantId'" -ForegroundColor Gray
-    Write-Host ""
-    Write-Host "3. Deploy the storage infrastructure:" -ForegroundColor White
-    Write-Host "   ./Deploy-AutomationLoggingStorageSetup.ps1 \`" -ForegroundColor Gray
-    Write-Host "     -SubscriptionId '$SubscriptionId' \`" -ForegroundColor Gray
-    Write-Host "     -TenantId '$TenantId' \`" -ForegroundColor Gray
-    Write-Host "     -ResourceGroupName '$ResourceGroupName'" -ForegroundColor Gray
-}
-
 function Show-GroupSummary {
     param(
         [Parameter(Mandatory = $true)]
         $Group
     )
     
-    Write-Host "`n=========================================" -ForegroundColor Cyan
-    Write-Host " DEPLOYMENT GROUP SETUP SUMMARY" -ForegroundColor Cyan
-    Write-Host "=========================================" -ForegroundColor Cyan
+    Write-Host "`n==========================================" -ForegroundColor Cyan
+    Write-Host " AUTOMATION STORAGE GROUP CREATED SUCCESSFULLY" -ForegroundColor Green
+    Write-Host "==========================================" -ForegroundColor Cyan
     
     if ($WhatIf) {
         Write-Host "✓ WhatIf mode - No changes were made" -ForegroundColor Green
         return
     }
     
-    Write-Host "`n✅ Azure AD Group: $($Group.DisplayName)" -ForegroundColor Green
-    Write-Host "  Object ID: $($Group.Id)" -ForegroundColor Gray
-    Write-Host "  Description: $($Group.Description)" -ForegroundColor Gray
+    Write-Host "`n📋 Group Details:" -ForegroundColor Cyan
+    Write-Host "  Name: $($Group.DisplayName)" -ForegroundColor White
+    Write-Host "  ID: $($Group.Id)" -ForegroundColor White
+    Write-Host "  Type: Security Group" -ForegroundColor White
+    Write-Host "  Description: $GroupDescription" -ForegroundColor White
     
-    Write-Host "`n📋 RBAC Role Assignments:" -ForegroundColor Cyan
-    Write-Host "  Target Scope: $ResourceGroupName" -ForegroundColor Gray
+    Write-Host "`n🔐 Assigned Azure RBAC Permissions:" -ForegroundColor Cyan
+    Write-Host "  Scope: /subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName" -ForegroundColor White
     foreach ($Role in $RequiredAzureRoles) {
         if ($Role.Required) {
             Write-Host "  ✓ $($Role.Name)" -ForegroundColor Green
@@ -400,8 +377,21 @@ function Show-GroupSummary {
     Write-Host "`n🎯 Purpose:" -ForegroundColor Cyan
     Write-Host "  This group provides least-privilege access for Automation Storage deployment" -ForegroundColor White
     Write-Host "  Members can create and manage Azure Storage infrastructure for automation logging" -ForegroundColor White
+    
+    Write-Host "`n👥 Next Steps:" -ForegroundColor Cyan
+    Write-Host "  1. Add authorized users to this group:" -ForegroundColor White
+    Write-Host "     Azure Portal → Azure AD → Groups → $GroupName → Members" -ForegroundColor Gray
+    Write-Host "  2. Grant automation managed identity permissions:" -ForegroundColor White
+    Write-Host "     ./Grant-AutomationStoragePermissions.ps1 -ManagedIdentityObjectId '<id>' -TenantId '$TenantId'" -ForegroundColor Gray
+    Write-Host "  3. Deploy storage infrastructure:" -ForegroundColor White
+    Write-Host "     ./Deploy-AutomationLoggingStorageSetup.ps1 -SubscriptionId '$SubscriptionId' -TenantId '$TenantId' -ResourceGroupName '$ResourceGroupName'" -ForegroundColor Gray
+    
+    Write-Host "`n🛡️ Security Benefits:" -ForegroundColor Yellow
+    Write-Host "  ✓ Dedicated group for storage operations only" -ForegroundColor Green
+    Write-Host "  ✓ Minimal required permissions" -ForegroundColor Green
+    Write-Host "  ✓ Scoped to storage account and blob management" -ForegroundColor Green
+    Write-Host "  ✓ Easily auditable access control" -ForegroundColor Green
 }
-
 
 # Main execution
 try {
@@ -427,20 +417,17 @@ try {
         Write-Warning "Failed to assign some Azure RBAC permissions. Check troubleshooting section."
     }
     
-    # Step 5: Show summary and next steps
+    # Step 5: Show summary
     Show-GroupSummary -Group $Group
-    Show-NextSteps -Group $Group
     
     Write-Host "`n🎉 Automation Storage deployment group setup completed!" -ForegroundColor Green
-    Write-Host "The group is ready for Automation Storage deployment." -ForegroundColor Green
     
 } catch {
-    Write-Error "Deployment group setup failed: $_"
-    Write-Host ""
-    Write-Host "Troubleshooting:" -ForegroundColor Yellow
-    Write-Host "1. Ensure you have User Administrator or Global Administrator role" -ForegroundColor Gray
-    Write-Host "2. Verify you have Owner or User Access Administrator on the resource group" -ForegroundColor Gray
+    Write-Error "Setup failed: $($_.Exception.Message)"
+    Write-Host "`nTroubleshooting:" -ForegroundColor Yellow
+    Write-Host "1. Verify you have User Administrator or Global Administrator role (for group creation)" -ForegroundColor Gray
+    Write-Host "2. Verify you have Owner or User Access Administrator role (for Azure RBAC assignments)" -ForegroundColor Gray
     Write-Host "3. Check that the resource group exists and you have access" -ForegroundColor Gray
-    Write-Host "4. Ensure you are using an organizational account, not personal MSA" -ForegroundColor Gray
+    Write-Host "4. Ensure you are using an organizational account (not personal MSA)" -ForegroundColor Gray
     exit 1
 }
