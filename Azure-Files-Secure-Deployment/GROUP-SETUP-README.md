@@ -24,17 +24,20 @@ Creates a dedicated Azure AD group with **least privilege access** scoped to a s
 # Basic usage - creates group with Storage and Network permissions
 .\Create-AzureFilesDeploymentGroup.ps1 `
     -SubscriptionId "12345678-1234-1234-1234-123456789012" `
+    -TenantId "11111111-1111-1111-1111-111111111111" `
     -ResourceGroupName "rg-storage-prod"
 
 # Custom group name
 .\Create-AzureFilesDeploymentGroup.ps1 `
     -SubscriptionId "12345678-1234-1234-1234-123456789012" `
+    -TenantId "11111111-1111-1111-1111-111111111111" `
     -ResourceGroupName "rg-storage-prod" `
     -GroupName "AzureFiles-ProductionDeployment"
 
 # Storage only (no VNet permissions)
 .\Create-AzureFilesDeploymentGroup.ps1 `
     -SubscriptionId "12345678-1234-1234-1234-123456789012" `
+    -TenantId "11111111-1111-1111-1111-111111111111" `
     -ResourceGroupName "rg-storage-prod" `
     -IncludeNetworkPermissions:$false
 ```
@@ -76,7 +79,7 @@ Add-AzADGroupMember -TargetGroupId "group-id-from-output" -MemberUserPrincipalNa
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `SubscriptionId` | ✅ Yes | - | Azure subscription ID (GUID format) |
-| `TenantId` | ❌ No | (current tenant) | Azure AD tenant ID (GUID format) - useful for multi-tenant scenarios |
+| `TenantId` | ✅ Yes | - | Azure AD tenant ID (GUID format) - required for targeted authentication |
 | `ResourceGroupName` | ✅ Yes | - | Resource group where Azure Files will be deployed |
 | `GroupName` | ❌ No | `AzureFiles-Deployment-{RGName}` | Custom Azure AD group name |
 | `GroupDescription` | ❌ No | Auto-generated | Description for the group |
@@ -99,6 +102,7 @@ The account running this script needs:
 ```powershell
 .\Create-AzureFilesDeploymentGroup.ps1 `
     -SubscriptionId "12345678-1234-1234-1234-123456789012" `
+    -TenantId "11111111-1111-1111-1111-111111111111" `
     -ResourceGroupName "rg-storage-production" `
     -GroupName "AzureFiles-Production-Deployers"
 ```
@@ -107,6 +111,7 @@ The account running this script needs:
 ```powershell
 .\Create-AzureFilesDeploymentGroup.ps1 `
     -SubscriptionId "87654321-4321-4321-4321-210987654321" `
+    -TenantId "11111111-1111-1111-1111-111111111111" `
     -ResourceGroupName "rg-storage-dev" `
     -GroupName "AzureFiles-Dev-Team" `
     -IncludeNetworkPermissions:$false
@@ -116,7 +121,7 @@ The account running this script needs:
 ```powershell
 .\Create-AzureFilesDeploymentGroup.ps1 `
     -SubscriptionId "12345678-1234-1234-1234-123456789012" `
-    -TenantId "87654321-4321-4321-4321-210987654321" `
+    -TenantId "22222222-2222-2222-2222-222222222222" `
     -ResourceGroupName "rg-storage-customer-a" `
     -GroupName "AzureFiles-CustomerA-Deployment"
 ```
@@ -125,6 +130,7 @@ The account running this script needs:
 ```powershell
 .\Create-AzureFilesDeploymentGroup.ps1 `
     -SubscriptionId "12345678-1234-1234-1234-123456789012" `
+    -TenantId "11111111-1111-1111-1111-111111111111" `
     -ResourceGroupName "rg-storage-test" `
     -WhatIf
 ```

@@ -10,6 +10,10 @@ param(
     [ValidatePattern("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")]
     [string]$SubscriptionId,
     
+    [Parameter(Mandatory = $true, HelpMessage = "Azure AD tenant ID (required for targeted authentication - prevents multi-tenant authentication issues)")]
+    [ValidatePattern("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")]
+    [string]$TenantId,
+    
     [Parameter(Mandatory = $true, HelpMessage = "Azure resource group name (1-90 characters, alphanumeric, periods, underscores, hyphens, parentheses)")]
     [ValidateLength(1, 90)]
     [ValidatePattern("^[-\w\._\(\)]+$")]
@@ -188,10 +192,11 @@ function Connect-ToAzure {
     try {
         Write-Host "Connecting to Azure..." -ForegroundColor Yellow
         $Context = Get-AzContext
-        if (-not $Context -or $Context.Subscription.Id -ne $SubscriptionId) {
-            Connect-AzAccount -SubscriptionId $SubscriptionId
+        if (-not $Context -or $Context.Subscription.Id -ne $SubscriptionId -or $Context.Tenant.Id -ne $TenantId) {
+            Write-Host "Authenticating with targeted tenant: $TenantId" -ForegroundColor Gray
+            Connect-AzAccount -SubscriptionId $SubscriptionId -TenantId $TenantId
         }
-        Write-Host "✓ Connected to Azure subscription: $SubscriptionId" -ForegroundColor Green
+        Write-Host "✓ Connected to Azure subscription: $SubscriptionId (Tenant: $TenantId)" -ForegroundColor Green
     } catch {
         Write-Error "Failed to connect to Azure: $($_.Exception.Message)"
         throw

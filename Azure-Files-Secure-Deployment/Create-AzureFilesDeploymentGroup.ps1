@@ -13,9 +13,9 @@ param(
     [ValidatePattern("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")]
     [string]$SubscriptionId,
     
-    [Parameter(Mandatory = $false, HelpMessage = "Azure AD tenant ID (optional - will use current tenant if not specified)")]
+    [Parameter(Mandatory = $true, HelpMessage = "Azure AD tenant ID (required for targeted authentication - prevents multi-tenant authentication issues)")]
     [ValidatePattern("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")]
-    [string]$TenantId = "",
+    [string]$TenantId,
     
     [Parameter(Mandatory = $true, HelpMessage = "Resource group name where Azure Files will be deployed")]
     [ValidateLength(1, 90)]
@@ -103,11 +103,7 @@ Write-Host @"
 "@ -ForegroundColor Cyan
 
 Write-Host "Subscription: $SubscriptionId" -ForegroundColor Yellow
-if ($TenantId) {
-    Write-Host "Tenant ID: $TenantId" -ForegroundColor Yellow
-} else {
-    Write-Host "Tenant ID: (using current tenant)" -ForegroundColor Yellow
-}
+Write-Host "Tenant ID: $TenantId" -ForegroundColor Yellow
 Write-Host "Resource Group: $ResourceGroupName" -ForegroundColor Yellow
 Write-Host "Group Name: $GroupName" -ForegroundColor Yellow
 Write-Host "Include Network Permissions: $IncludeNetworkPermissions" -ForegroundColor Yellow
@@ -139,7 +135,7 @@ function Connect-ToAzure {
             $NeedsConnection = $true
         } elseif ($Context.Subscription.Id -ne $SubscriptionId) {
             $NeedsConnection = $true
-        } elseif ($TenantId -and $Context.Tenant.Id -ne $TenantId) {
+        } elseif ($Context.Tenant.Id -ne $TenantId) {
             $NeedsConnection = $true
         }
         
@@ -147,13 +143,8 @@ function Connect-ToAzure {
             Write-Host "Please authenticate with an account that has:" -ForegroundColor Yellow
             Write-Host "  - User Administrator or Global Administrator (to create groups)" -ForegroundColor Gray
             Write-Host "  - Owner or User Access Administrator (to assign roles)" -ForegroundColor Gray
-            
-            if ($TenantId) {
-                Write-Host "  - Connecting to tenant: $TenantId" -ForegroundColor Gray
-                Connect-AzAccount -SubscriptionId $SubscriptionId -TenantId $TenantId
-            } else {
-                Connect-AzAccount -SubscriptionId $SubscriptionId
-            }
+            Write-Host "  - Connecting to tenant: $TenantId" -ForegroundColor Gray
+            Connect-AzAccount -SubscriptionId $SubscriptionId -TenantId $TenantId
         }
         
         $Context = Get-AzContext
@@ -218,8 +209,8 @@ function New-AzureFilesDeploymentGroup {
         $Group = New-AzADGroup `
             -DisplayName $GroupName `
             -Description $GroupDescription `
-            -SecurityEnabled $true `
-            -MailEnabled $false
+            -SecurityEnabled `
+            -MailEnabled:$false
         
         Write-Host "✓ Created Azure AD group: $GroupName" -ForegroundColor Green
         Write-Host "  Group ID: $($Group.Id)" -ForegroundColor Gray

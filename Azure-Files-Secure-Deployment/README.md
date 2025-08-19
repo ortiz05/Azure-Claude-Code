@@ -11,6 +11,7 @@ Use your Global Admin account with OAuth authentication (browser prompt):
 # No setup required - just run the deployment script
 .\Deploy-SecureAzureFiles.ps1 `
     -SubscriptionId "your-subscription-id" `
+    -TenantId "your-tenant-id" `
     -ResourceGroupName "rg-secure-files" `
     -StorageAccountName "stgsecurefiles001" `
     -Location "East US 2"
@@ -55,6 +56,7 @@ Then use the generated deployment script with Service Principal authentication.
 | Parameter | Description | Requirements | Example |
 |-----------|-------------|--------------|---------|
 | `SubscriptionId` | Azure subscription ID | GUID format | `12345678-1234-1234-1234-123456789012` |
+| `TenantId` | Azure AD tenant ID | GUID format (required for targeted authentication) | `11111111-1111-1111-1111-111111111111` |
 | `ResourceGroupName` | Resource group name | 1-90 characters, alphanumeric, periods, underscores, hyphens, parentheses | `rg-secure-files` |
 | `StorageAccountName` | Storage account name | **3-24 characters, lowercase letters and numbers only, globally unique** | `stgsecurefiles001` |
 | `Location` | Azure region | Valid Azure region name | `East US 2`, `West Europe`, `Southeast Asia` |
@@ -90,6 +92,7 @@ Then use the generated deployment script with Service Principal authentication.
 ```powershell
 .\Deploy-SecureAzureFiles.ps1 `
     -SubscriptionId "12345678-1234-1234-1234-123456789012" `
+    -TenantId "11111111-1111-1111-1111-111111111111" `
     -ResourceGroupName "rg-files-prod" `
     -StorageAccountName "stgfilesprod001" `
     -Location "East US 2"
@@ -99,6 +102,7 @@ Then use the generated deployment script with Service Principal authentication.
 ```powershell
 .\Deploy-SecureAzureFiles.ps1 `
     -SubscriptionId "12345678-1234-1234-1234-123456789012" `
+    -TenantId "11111111-1111-1111-1111-111111111111" `
     -ResourceGroupName "rg-files-prod" `
     -StorageAccountName "stgfilesprod001" `
     -Location "East US 2" `
@@ -111,6 +115,7 @@ Then use the generated deployment script with Service Principal authentication.
 ```powershell
 .\Deploy-SecureAzureFiles.ps1 `
     -SubscriptionId "12345678-1234-1234-1234-123456789012" `
+    -TenantId "11111111-1111-1111-1111-111111111111" `
     -ResourceGroupName "rg-files-prod" `
     -StorageAccountName "stgfilesprod001" `
     -Location "East US 2" `
@@ -123,6 +128,7 @@ Then use the generated deployment script with Service Principal authentication.
 ```powershell
 .\Deploy-SecureAzureFiles.ps1 `
     -SubscriptionId "12345678-1234-1234-1234-123456789012" `
+    -TenantId "11111111-1111-1111-1111-111111111111" `
     -ResourceGroupName "rg-files-prod" `
     -StorageAccountName "stgfilesprod001" `
     -Location "East US 2" `
@@ -133,6 +139,7 @@ Then use the generated deployment script with Service Principal authentication.
 ```powershell
 .\Deploy-SecureAzureFiles.ps1 `
     -SubscriptionId "12345678-1234-1234-1234-123456789012" `
+    -TenantId "11111111-1111-1111-1111-111111111111" `
     -ResourceGroupName "rg-files-test" `
     -StorageAccountName "stgfilestest001" `
     -Location "East US 2" `

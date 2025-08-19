@@ -553,6 +553,211 @@ function Export-PermissionReports {
     }
 }
 
+function Send-HighRiskPermissionAlert {
+    param(
+        [array]$HighRiskApplications,
+        [string[]]$SecurityTeamEmails,
+        [string[]]$ITAdminEmails
+    )
+    
+    try {
+        # Calculate metrics for the email
+        $TotalApplications = $HighRiskApplications.Count
+        $CriticalPermissions = @($HighRiskApplications | Where-Object { $_.CriticalRiskPermissions -gt 0 })
+        $HighRiskPermissions = @($HighRiskApplications | Where-Object { $_.HighRiskPermissions -gt 0 })
+        
+        $TotalPermissions = ($HighRiskApplications | Measure-Object -Property TotalPermissions -Sum).Sum
+        $CriticalRiskCount = ($HighRiskApplications | Measure-Object -Property CriticalRiskPermissions -Sum).Sum
+        $HighRiskCount = ($HighRiskApplications | Measure-Object -Property HighRiskPermissions -Sum).Sum
+        $ApplicationPermissions = ($HighRiskApplications | Measure-Object -Property ApplicationPermissions -Sum).Sum
+        $AdminConsentRequired = ($HighRiskApplications | Measure-Object -Property AdminConsentRequired -Sum).Sum
+        
+        # Build table rows for critical permissions
+        $CriticalRows = ""
+        foreach ($App in $CriticalPermissions) {
+            $CriticalRows += @"
+                <tr>
+                    <td class="app-name">$($App.ApplicationName)</td>
+                    <td class="permission-name">High-Risk Permissions</td>
+                    <td><span class="permission-type-app">Application</span></td>
+                    <td><span class="risk-critical">CRITICAL</span></td>
+                    <td>Microsoft Graph</td>
+                    <td class="risk-factors">$($App.CriticalRiskPermissions) critical permissions</td>
+                </tr>
+"@
+        }
+        
+        # Build table rows for high risk permissions
+        $HighRiskRows = ""
+        foreach ($App in $HighRiskPermissions) {
+            $HighRiskRows += @"
+                <tr>
+                    <td class="app-name">$($App.ApplicationName)</td>
+                    <td class="permission-name">Elevated Permissions</td>
+                    <td><span class="permission-type-app">Application</span></td>
+                    <td><span class="risk-high">HIGH</span></td>
+                    <td>Microsoft Graph</td>
+                    <td class="risk-factors">$($App.HighRiskPermissions) high-risk permissions</td>
+                </tr>
+"@
+        }
+        
+        # Create the HTML email template (embedded)
+        $HtmlTemplate = @"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>High-Risk Application Permission Alert</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 900px; margin: 0 auto; padding: 20px; background-color: #f8f9fa; }
+        .container { background-color: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .header { background: linear-gradient(135deg, #e91e63 0%, #f44336 100%); color: white; padding: 30px; border-radius: 8px 8px 0 0; margin: -40px -40px 40px -40px; text-align: center; }
+        .header h1 { margin: 0 0 10px 0; font-size: 28px; font-weight: 600; }
+        .alert-icon { font-size: 48px; margin-bottom: 15px; }
+        .severity-critical { background-color: #ffebee; border-left: 5px solid #d32f2f; padding: 20px; margin: 25px 0; border-radius: 4px; }
+        .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px; margin: 30px 0; }
+        .metric-card { background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); padding: 20px; border-radius: 8px; text-align: center; border: 1px solid #dee2e6; }
+        .metric-number { font-size: 32px; font-weight: 700; margin-bottom: 8px; }
+        .metric-label { font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: 1px; }
+        .metric-critical { color: #d32f2f; }
+        .metric-high { color: #ff9800; }
+        .metric-info { color: #1976d2; }
+        .permission-table { width: 100%; border-collapse: collapse; margin: 25px 0; background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .permission-table th { background: linear-gradient(135deg, #37474f 0%, #455a64 100%); color: white; padding: 15px 12px; text-align: left; font-weight: 600; font-size: 13px; }
+        .permission-table td { padding: 12px; border-bottom: 1px solid #e0e0e0; font-size: 13px; }
+        .risk-critical { background-color: #ffcdd2; color: #c62828; padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 11px; }
+        .risk-high { background-color: #ffe0b2; color: #e65100; padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 11px; }
+        .permission-type-app { background-color: #ffebee; color: #d32f2f; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; }
+        .app-name { font-weight: 600; color: #1976d2; }
+        .permission-name { font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace; background-color: #f5f5f5; padding: 2px 4px; border-radius: 3px; font-size: 11px; }
+        .footer { margin-top: 40px; padding-top: 25px; border-top: 2px solid #e0e0e0; font-size: 12px; color: #666; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="alert-icon">🛡️</div>
+            <h1>Application Permission Security Alert</h1>
+            <p>High-Risk Permissions Detected - Security Review Required</p>
+        </div>
+
+        <div class="severity-critical">
+            <h3>🔴 CRITICAL SECURITY FINDINGS</h3>
+            <p><strong>$CriticalRiskCount</strong> application permissions require immediate security review.</p>
+            <p><strong>Primary Concerns:</strong> Over-privileged applications, unused apps with dangerous permissions, admin consent violations</p>
+        </div>
+
+        <div class="summary-grid">
+            <div class="metric-card">
+                <div class="metric-number metric-info">$TotalApplications</div>
+                <div class="metric-label">Total Applications</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-number metric-info">$TotalPermissions</div>
+                <div class="metric-label">Total Permissions</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-number metric-critical">$CriticalRiskCount</div>
+                <div class="metric-label">Critical Risk</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-number metric-high">$HighRiskCount</div>
+                <div class="metric-label">High Risk</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-number metric-high">$ApplicationPermissions</div>
+                <div class="metric-label">App Permissions</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-number metric-info">$AdminConsentRequired</div>
+                <div class="metric-label">Admin Consent Req.</div>
+            </div>
+        </div>
+
+        <h3>🚨 Critical Risk Permissions</h3>
+        <table class="permission-table">
+            <thead>
+                <tr>
+                    <th>Application</th>
+                    <th>Permission</th>
+                    <th>Type</th>
+                    <th>Risk Level</th>
+                    <th>Resource API</th>
+                    <th>Risk Factors</th>
+                </tr>
+            </thead>
+            <tbody>
+                $CriticalRows
+            </tbody>
+        </table>
+
+        <h3>⚠️ High Risk Permissions</h3>
+        <table class="permission-table">
+            <thead>
+                <tr>
+                    <th>Application</th>
+                    <th>Permission</th>
+                    <th>Type</th>
+                    <th>Risk Level</th>
+                    <th>Resource API</th>
+                    <th>Risk Factors</th>
+                </tr>
+            </thead>
+            <tbody>
+                $HighRiskRows
+            </tbody>
+        </table>
+
+        <div class="footer">
+            <p>This alert was generated by the Enterprise Application Permission Auditor</p>
+            <p>Report Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')</p>
+            <p>For questions about this alert, contact the IT Security Team</p>
+        </div>
+    </div>
+</body>
+</html>
+"@
+        
+        # Send email to all recipients
+        $AllRecipients = @()
+        $AllRecipients += $SecurityTeamEmails
+        $AllRecipients += $ITAdminEmails
+        
+        foreach ($RecipientEmail in $AllRecipients) {
+            $EmailMessage = @{
+                Message = @{
+                    Subject = "🚨 SECURITY ALERT: High-Risk Application Permissions Detected"
+                    Body = @{
+                        ContentType = "HTML"
+                        Content = $HtmlTemplate
+                    }
+                    ToRecipients = @(
+                        @{
+                            EmailAddress = @{
+                                Address = $RecipientEmail
+                            }
+                        }
+                    )
+                }
+                SaveToSentItems = $true
+            }
+            
+            try {
+                $EmailJson = $EmailMessage | ConvertTo-Json -Depth 10
+                Invoke-MgGraphRequest -Method POST -Uri "https://graph.microsoft.com/v1.0/me/sendMail" -Body $EmailJson
+                Write-Host "  ✓ Alert sent to $RecipientEmail" -ForegroundColor Green
+            }
+            catch {
+                Write-Warning "  ⚠ Failed to send alert to $RecipientEmail`: $_"
+            }
+        }
+        
+    } catch {
+        Write-Warning "Failed to send permission alerts: $_"
+    }
+}
+
 # Main execution
 try {
     Connect-ToMicrosoftGraph
@@ -587,9 +792,9 @@ try {
     
     Write-Host "`n📁 Reports generated in: $ReportPath" -ForegroundColor Gray
     
-    if ($SendNotifications -and ($SecurityTeamEmails.Count -gt 0 -or $ITAdminEmails.Count -gt 0)) {
-        Write-Host "`n📧 Sending notifications..." -ForegroundColor Yellow
-        Write-Host "  (Notification functionality will be implemented in templates)" -ForegroundColor Gray
+    if ($SendNotifications -and ($SecurityTeamEmails.Count -gt 0 -or $ITAdminEmails.Count -gt 0) -and $HighRiskApplications.Count -gt 0) {
+        Write-Host "`n📧 Sending high-risk permission alerts..." -ForegroundColor Yellow
+        Send-HighRiskPermissionAlert -HighRiskApplications $HighRiskApplications -SecurityTeamEmails $SecurityTeamEmails -ITAdminEmails $ITAdminEmails
     }
     
 } catch {
