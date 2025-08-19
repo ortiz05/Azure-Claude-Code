@@ -171,7 +171,7 @@ Write-Host ""
 if ($WhatIf) {
     Write-Host "🔍 WHATIF MODE - No changes will be made" -ForegroundColor Yellow
     Write-Host ""
-    Write-Host "Would grant the following Azure RBAC roles to managed identity $ManagedIdentityObjectId:" -ForegroundColor Yellow
+    Write-Host "Would grant the following Azure RBAC roles to managed identity $ManagedIdentityObjectId" -ForegroundColor Yellow
     foreach ($Role in $RequiredRoles) {
         Write-Host "  ✓ $($Role.Name)" -ForegroundColor Green
         Write-Host "    Scope: Resource Group '$ResourceGroupName'" -ForegroundColor Gray
