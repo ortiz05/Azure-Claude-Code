@@ -56,7 +56,49 @@ This repository contains **7 core security automations** plus **1 infrastructure
 - **WhatIf Mode**: Safe testing capabilities for all operations
 - **Error Handling**: Comprehensive try-catch with actionable guidance
 
-#### 3. Multi-Tenant Support & Targeted Authentication
+#### 3. Azure Timing and Eventual Consistency Patterns 🆕
+**CRITICAL: Handle Azure AD and resource timing issues:**
+- **Azure AD Group Creation**: Always wait for group propagation before role assignments
+- **Service Principal Creation**: Verify object exists before permission grants
+- **Role Assignment Retry**: Implement exponential backoff (3 attempts: 5, 10, 20 seconds)
+- **Resource Dependencies**: Wait for resource readiness before dependent operations
+- **Validation Loops**: Check object existence with timeout (max 120 seconds)
+
+**Standard Timing Pattern for Azure AD Objects:**
+```powershell
+# Wait for Azure AD object propagation
+$MaxWaitTime = 120
+$WaitInterval = 5
+$ElapsedTime = 0
+do {
+    Start-Sleep -Seconds $WaitInterval
+    $ElapsedTime += $WaitInterval
+    $VerifyObject = Get-AzADGroup -ObjectId $Object.Id -ErrorAction SilentlyContinue
+    if ($VerifyObject) { break }
+} while ($ElapsedTime -lt $MaxWaitTime)
+```
+
+**Standard Retry Pattern for Role Assignments:**
+```powershell
+# Retry with exponential backoff
+$MaxRetries = 3
+$RetryCount = 0
+do {
+    try {
+        if ($RetryCount -gt 0) {
+            $WaitTime = [math]::Pow(2, $RetryCount) * 5
+            Start-Sleep -Seconds $WaitTime
+        }
+        New-AzRoleAssignment -ObjectId $Id -RoleDefinitionName $Role -Scope $Scope
+        break
+    } catch {
+        $RetryCount++
+        if ($RetryCount -gt $MaxRetries) { throw }
+    }
+} while ($RetryCount -le $MaxRetries)
+```
+
+#### 4. Multi-Tenant Support & Targeted Authentication
 **For Azure infrastructure scripts:**
 - **MANDATORY**: TenantId parameter is required (not optional) to prevent authentication issues
 - Add `TenantId` parameter with GUID validation regex and `Mandatory = $true`
@@ -64,7 +106,7 @@ This repository contains **7 core security automations** plus **1 infrastructure
 - Prevents multi-tenant authentication confusion and guest account issues
 - Essential for enterprise MSP scenarios
 
-#### 4. Documentation Standards
+#### 5. Documentation Standards
 **When creating new solutions, AI agents MUST:**
 - Update main README.md with solution overview
 - Update main Claude.md with technical patterns and lessons learned
@@ -73,7 +115,7 @@ This repository contains **7 core security automations** plus **1 infrastructure
 - Document all integration patterns (Intune, Key Vault, VNet)
 - **Create and maintain service-specific Claude.md in Documentation folder**
 
-#### 5. Service-Specific Documentation Maintenance
+#### 6. Service-Specific Documentation Maintenance
 **CRITICAL: Each automation service has its own Claude.md file that MUST be updated when working on that service:**
 
 **Service-Specific Claude.md Locations:**
@@ -219,6 +261,10 @@ This repository contains **7 core security automations** plus **1 infrastructure
 - **Legacy Device Management**: Use Intune configuration profiles, NOT net use commands
 - **Service Principal Confusion**: Clearly document when automation is needed vs manual deployment
 - **Hardcoded Credentials**: Zero tolerance - implement comprehensive scanning
+- **Azure Timing Issues**: Never assume immediate availability of Azure AD objects or role assignments
+- **No Retry Logic**: Always implement retry with backoff for Azure AD operations
+- **Ignoring Eventual Consistency**: Azure AD operations require propagation time - validate before proceeding
+- **🚨 PUBLIC ACCESS SECURITY GAP**: NEVER leave Azure resources with unrestricted public access after deployment
 
 ### Established Success Patterns
 - **Infrastructure Security**: Implement security-first design with enterprise controls
@@ -226,6 +272,32 @@ This repository contains **7 core security automations** plus **1 infrastructure
 - **Group-Based Permissions**: Provision dedicated Azure AD groups with scoped access
 - **Modern Device Management**: Integrate with Intune using Administrative Templates
 - **Clear Authentication Guidance**: Document OAuth vs Service Principal scenarios
+- **Azure Timing Resilience**: Implement wait/retry patterns for Azure AD eventual consistency
+- **Propagation Validation**: Verify object existence before dependent operations
+- **Graceful Failure Handling**: Provide manual commands when automatic retry fails
+- **🔒 Secure Infrastructure Deployment**: Always restrict public access after resource provisioning
+
+### Infrastructure Deployment Security Pattern (CRITICAL) 🚨
+**MANDATORY for ALL Azure infrastructure deployments:**
+
+```powershell
+# 1. Create resource with temporary public access for configuration
+$Resource = New-AzStorageAccount -PublicNetworkAccess "Enabled" # Temporary for setup
+
+# 2. Configure all necessary settings while public access enabled
+# - File shares, encryption, networking rules, etc.
+
+# 3. ALWAYS restrict access based on configuration:
+if ($VirtualNetworkName -or $AllowedIPRanges.Count -gt 0) {
+    # Restricted public access with VNet/IP rules
+    Update-AzStorageAccount -PublicNetworkAccess "Enabled" # With restrictions
+} else {
+    # Complete lockdown - private endpoints only
+    Update-AzStorageAccount -PublicNetworkAccess "Disabled"
+}
+```
+
+**Security Principle**: Never leave infrastructure resources with unrestricted public internet access. This pattern prevents security gaps during deployment while ensuring proper lockdown afterward.
 
 ### Testing and Validation Framework
 - Comprehensive PowerShell 7+ compatibility checks

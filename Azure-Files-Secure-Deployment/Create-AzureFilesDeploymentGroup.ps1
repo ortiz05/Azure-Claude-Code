@@ -118,6 +118,11 @@ $RequiredRoles = @(
         Required = $true
     },
     @{
+        Name = "Tag Contributor"
+        Reason = "Apply governance tags to resource groups and resources"
+        Required = $true
+    },
+    @{
         Name = "Network Contributor" 
         Reason = "Configure VNet service endpoints and network security"
         Required = $IncludeNetworkPermissions
