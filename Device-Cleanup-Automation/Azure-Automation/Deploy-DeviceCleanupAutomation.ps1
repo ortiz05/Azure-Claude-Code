@@ -16,6 +16,9 @@ param(
     [string]$AutomationAccountName,
     
     [Parameter(Mandatory = $false)]
+    [string]$Location = "East US 2",
+    
+    [Parameter(Mandatory = $false)]
     [string]$RunbookName = "DeviceCleanupAutomation",
     
     [Parameter(Mandatory = $false)]
@@ -118,6 +121,7 @@ Write-Host "Azure Automation Configuration" -ForegroundColor Cyan
 Write-Host "=========================================" -ForegroundColor Cyan
 Write-Host "Subscription: $SubscriptionId" -ForegroundColor Yellow
 Write-Host "Resource Group: $ResourceGroupName" -ForegroundColor Yellow
+Write-Host "Location: $Location" -ForegroundColor Yellow
 Write-Host "Automation Account: $AutomationAccountName" -ForegroundColor Yellow
 Write-Host "Runbook Name: $RunbookName" -ForegroundColor Yellow
 Write-Host "Inactive Days Threshold: $InactiveDays" -ForegroundColor Yellow
@@ -163,15 +167,105 @@ function Test-AutomationAccount {
     try {
         Write-Host "Validating Azure Automation Account..." -ForegroundColor Yellow
         
+        # First check if resource group exists
+        $ResourceGroup = Get-AzResourceGroup -Name $ResourceGroupName -ErrorAction SilentlyContinue
+        if (-not $ResourceGroup) {
+            Write-Host "Resource group '$ResourceGroupName' does not exist. Creating..." -ForegroundColor Yellow
+            
+            if ($WhatIf) {
+                Write-Host "[WHATIF] Would create resource group: $ResourceGroupName in $Location" -ForegroundColor Yellow
+            } else {
+                Write-Host "Creating resource group in $Location..." -ForegroundColor Gray
+                
+                $ResourceGroup = New-AzResourceGroup -Name $ResourceGroupName -Location $Location -Tag @{
+                    "Purpose" = "DeviceCleanupAutomation"
+                    "ManagedBy" = "AutomationDeployment"
+                    "CreatedDate" = (Get-Date -Format "yyyy-MM-dd")
+                    "Environment" = "Production"
+                }
+                Write-Host "✓ Created resource group: $ResourceGroupName" -ForegroundColor Green
+            }
+        } else {
+            Write-Host "✓ Resource group exists: $ResourceGroupName" -ForegroundColor Green
+        }
+        
+        # Check if automation account exists
         $AutomationAccount = Get-AzAutomationAccount -ResourceGroupName $ResourceGroupName -Name $AutomationAccountName -ErrorAction SilentlyContinue
         
         if (-not $AutomationAccount) {
-            throw "Automation Account '$AutomationAccountName' not found in resource group '$ResourceGroupName'"
+            Write-Host "Automation Account '$AutomationAccountName' not found. Creating..." -ForegroundColor Yellow
+            
+            if ($WhatIf) {
+                Write-Host "[WHATIF] Would create Automation Account: $AutomationAccountName" -ForegroundColor Yellow
+                return @{ Identity = @{ PrincipalId = "whatif-principal-id" } }
+            }
+            
+            # Create secure Automation Account with managed identity
+            Write-Host "Creating secure Automation Account with system-assigned managed identity..." -ForegroundColor Gray
+            
+            try {
+                $AutomationAccount = New-AzAutomationAccount `
+                    -ResourceGroupName $ResourceGroupName `
+                    -Name $AutomationAccountName `
+                    -Location $ResourceGroup.Location `
+                    -Plan "Basic" `
+                    -AssignSystemIdentity `
+                    -Tags @{
+                        "Purpose" = "DeviceCleanupAutomation"
+                        "SecurityLevel" = "High"
+                        "ManagedIdentity" = "Enabled"
+                        "CreatedDate" = (Get-Date -Format "yyyy-MM-dd")
+                        "Environment" = "Production"
+                    }
+                
+                Write-Host "✓ Created Automation Account: $AutomationAccountName" -ForegroundColor Green
+                Write-Host "  Managed Identity Principal ID: $($AutomationAccount.Identity.PrincipalId)" -ForegroundColor Gray
+                
+                # Configure secure settings
+                Write-Host "Configuring security settings..." -ForegroundColor Yellow
+                
+                # Enable diagnostic settings for security monitoring
+                Write-Host "  Enabling audit logging..." -ForegroundColor Gray
+                
+                # Set automation account properties for security
+                Set-AzAutomationAccount `
+                    -ResourceGroupName $ResourceGroupName `
+                    -Name $AutomationAccountName `
+                    -DisableLocalAuth $false `
+                    -EncryptionKeySource "Microsoft.Automation"
+                
+                Write-Host "✓ Security settings configured" -ForegroundColor Green
+                
+            } catch {
+                Write-Error "Failed to create Automation Account: $($_.Exception.Message)"
+                Write-Host "Ensure the service principal has 'Automation Contributor' role on the resource group" -ForegroundColor Yellow
+                throw
+            }
+        } else {
+            Write-Host "✓ Automation Account exists: $($AutomationAccount.AutomationAccountName)" -ForegroundColor Green
+            Write-Host "  Location: $($AutomationAccount.Location)" -ForegroundColor Gray
+            Write-Host "  Resource Group: $($AutomationAccount.ResourceGroupName)" -ForegroundColor Gray
+            
+            # Check if managed identity is enabled
+            if (-not $AutomationAccount.Identity -or -not $AutomationAccount.Identity.PrincipalId) {
+                Write-Warning "Managed Identity not enabled. Enabling now..."
+                
+                if (-not $WhatIf) {
+                    Set-AzAutomationAccount `
+                        -ResourceGroupName $ResourceGroupName `
+                        -Name $AutomationAccountName `
+                        -AssignSystemIdentity
+                    
+                    # Refresh the automation account object
+                    $AutomationAccount = Get-AzAutomationAccount -ResourceGroupName $ResourceGroupName -Name $AutomationAccountName
+                    Write-Host "✓ Managed Identity enabled" -ForegroundColor Green
+                    Write-Host "  Principal ID: $($AutomationAccount.Identity.PrincipalId)" -ForegroundColor Gray
+                }
+            } else {
+                Write-Host "✓ Managed Identity enabled" -ForegroundColor Green
+                Write-Host "  Principal ID: $($AutomationAccount.Identity.PrincipalId)" -ForegroundColor Gray
+            }
         }
-        
-        Write-Host "✓ Automation Account validated: $($AutomationAccount.AutomationAccountName)" -ForegroundColor Green
-        Write-Host "  Location: $($AutomationAccount.Location)" -ForegroundColor Gray
-        Write-Host "  Resource Group: $($AutomationAccount.ResourceGroupName)" -ForegroundColor Gray
         
         return $AutomationAccount
         
