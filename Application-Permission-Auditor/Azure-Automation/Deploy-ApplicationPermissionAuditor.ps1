@@ -204,9 +204,26 @@ function Install-RequiredModules {
 }
 
 function Create-RunbookContent {
+    # Read the full Application Permission Auditor script content
+    $MainScriptPath = "$PSScriptRoot\ApplicationPermissionAuditor.ps1"
+    if (-not (Test-Path $MainScriptPath)) {
+        throw "Main Application Permission Auditor script not found at: $MainScriptPath"
+    }
+    
+    # Get the main script content and remove the param block since we'll handle parameters differently
+    $MainScriptContent = Get-Content $MainScriptPath -Raw
+    
+    # Remove the original param block and CmdletBinding from the main script
+    $MainScriptContent = $MainScriptContent -replace '(?s)^[^#]*\[CmdletBinding\(\)\].*?^\)', ''
+    $MainScriptContent = $MainScriptContent -replace '(?s)^param\(.*?^\)', ''
+    
+    # Create the runbook content with embedded main script
     $RunbookContent = @"
+#Requires -Version 7.4
+
 # Application Permission Auditor - Azure Automation Runbook
 # This runbook performs enterprise-wide application permission auditing
+# PowerShell 7+ Compatible with Microsoft Graph modules
 
 param(
     [string]`$SecurityTeamEmails = "$($SecurityTeamEmails -join ',')",
@@ -223,41 +240,90 @@ param(
 
 Write-Output "========================================="
 Write-Output "Application Permission Auditor - Azure Automation"
+Write-Output "PowerShell Version: `$(`$PSVersionTable.PSVersion)"
 Write-Output "Started at: `$(Get-Date)"
 Write-Output "========================================="
 
 try {
-    # Connect to Microsoft Graph using Managed Identity
-    Write-Output "Connecting to Microsoft Graph with Managed Identity..."
-    Connect-MgGraph -Identity -NoWelcome
+    # Import required modules for PowerShell 7 compatibility
+    Write-Output "Importing Microsoft Graph modules..."
+    Import-Module Microsoft.Graph.Authentication -Force
+    Import-Module Microsoft.Graph.Applications -Force
+    Import-Module Microsoft.Graph.Identity.SignIns -Force
+    Import-Module Microsoft.Graph.Reports -Force
+    Import-Module Microsoft.Graph.Mail -Force
+    Write-Output "✓ Modules imported successfully"
     
-    `$Context = Get-MgContext
-    Write-Output "✓ Connected to tenant: `$(`$Context.TenantId)"
+    # Convert email parameters back to arrays for main script
+    `$SecurityTeamEmailArray = if (`$SecurityTeamEmails) { `$SecurityTeamEmails -split ',' -ne '' } else { @() }
+    `$ITAdminEmailArray = if (`$ITAdminEmails) { `$ITAdminEmails -split ',' -ne '' } else { @() }
     
-    # Convert email parameters back to arrays
-    `$SecurityTeamEmailArray = if (`$SecurityTeamEmails) { `$SecurityTeamEmails -split ',' } else { @() }
-    `$ITAdminEmailArray = if (`$ITAdminEmails) { `$ITAdminEmails -split ',' } else { @() }
+    Write-Output "Executing Application Permission Auditor with managed identity..."
+    Write-Output "Security Team Emails: `$(`$SecurityTeamEmailArray.Count) addresses"
+    Write-Output "IT Admin Emails: `$(`$ITAdminEmailArray.Count) addresses"
+    Write-Output "WhatIf Mode: `$WhatIf"
     
-    # Execute the main Application Permission Auditor logic
-    `$ScriptPath = "`$PSScriptRoot\ApplicationPermissionAuditor.ps1"
+    # Set variables that the main script expects
+    `$TenantId = `$env:AZURE_TENANT_ID
+    `$ClientId = `$env:AZURE_CLIENT_ID
+    `$ClientSecret = `$env:AZURE_CLIENT_SECRET
+    `$ExcludeApplications = @()
+    `$ReportPath = "C:\temp\Reports"
+    `$StorageAccountName = `$null
+    `$StorageContainerName = "permission-audit-reports"
+    `$UseManagedIdentity = `$true
+    `$HighRiskPermissions = @(
+        "Directory.ReadWrite.All",
+        "User.ReadWrite.All", 
+        "Group.ReadWrite.All",
+        "Application.ReadWrite.All",
+        "AppRoleAssignment.ReadWrite.All",
+        "Device.ReadWrite.All",
+        "Policy.ReadWrite.All",
+        "RoleManagement.ReadWrite.Directory",
+        "Sites.FullControl.All",
+        "Files.ReadWrite.All",
+        "Mail.ReadWrite.All",
+        "Calendars.ReadWrite.All",
+        "Contacts.ReadWrite.All"
+    )
+    `$AdminConsentRequiredPermissions = @(
+        "Directory.Read.All",
+        "Directory.ReadWrite.All",
+        "User.Read.All",
+        "User.ReadWrite.All",
+        "Group.Read.All", 
+        "Group.ReadWrite.All",
+        "Application.Read.All",
+        "Application.ReadWrite.All",
+        "DeviceManagementApps.ReadWrite.All",
+        "DeviceManagementConfiguration.ReadWrite.All"
+    )
     
-    if (Test-Path `$ScriptPath) {
-        . `$ScriptPath
-    } else {
-        # Inline the main script logic here
-        Write-Output "Main script not found, executing inline logic..."
-        
-        # [Main ApplicationPermissionAuditor.ps1 content would be inserted here in production]
-        # For deployment, the main script content should be embedded or uploaded separately
-        
-        Write-Output "✓ Application permission audit completed successfully"
+    # Create reports directory
+    if (-not (Test-Path `$ReportPath)) {
+        New-Item -Path `$ReportPath -ItemType Directory -Force | Out-Null
     }
+    
+    #############################################################################
+    # EMBEDDED APPLICATION PERMISSION AUDITOR SCRIPT
+    #############################################################################
+    
+$MainScriptContent
+    
+    #############################################################################
+    # END EMBEDDED SCRIPT
+    #############################################################################
+    
+    Write-Output "✓ Application Permission Auditor completed successfully"
     
 } catch {
     Write-Error "Application Permission Auditor failed: `$(`$_.Exception.Message)"
+    Write-Output "Stack Trace: `$(`$_.ScriptStackTrace)"
     throw
 } finally {
     if (Get-MgContext) {
+        Write-Output "Disconnecting from Microsoft Graph..."
         Disconnect-MgGraph -ErrorAction SilentlyContinue
     }
 }
@@ -272,46 +338,57 @@ Write-Output "========================================="
 
 function Deploy-Runbook {
     try {
-        Write-Host "Creating/updating runbook..." -ForegroundColor Yellow
+        Write-Host "Creating/updating runbook with PowerShell 7.4 runtime..." -ForegroundColor Yellow
         
         $RunbookContent = Create-RunbookContent
         
         if ($WhatIf) {
             Write-Host "[WHATIF] Would create/update runbook: $RunbookName" -ForegroundColor Yellow
             Write-Host "[WHATIF] Runbook content length: $($RunbookContent.Length) characters" -ForegroundColor Yellow
+            Write-Host "[WHATIF] Runtime Environment: PowerShell 7.4" -ForegroundColor Yellow
         } else {
-            # Check if runbook exists
-            $ExistingRunbook = Get-AzAutomationRunbook -ResourceGroupName $ResourceGroupName `
-                -AutomationAccountName $AutomationAccountName `
-                -Name $RunbookName -ErrorAction SilentlyContinue
+            Write-Host "Note: PowerShell 7.4 runtime should be configured in Azure Portal" -ForegroundColor Yellow
+            Write-Host "Go to: Automation Account > Runtime Environments > Create > PowerShell 7.4" -ForegroundColor Gray
             
-            if ($ExistingRunbook) {
-                Write-Host "Updating existing runbook..." -ForegroundColor Gray
-                Set-AzAutomationRunbookDefinition -ResourceGroupName $ResourceGroupName `
+            # Create temporary file for runbook content
+            $TempFile = [System.IO.Path]::GetTempFileName() + ".ps1"
+            $RunbookContent | Out-File -FilePath $TempFile -Encoding UTF8
+            
+            try {
+                # Check if runbook exists
+                $ExistingRunbook = Get-AzAutomationRunbook -ResourceGroupName $ResourceGroupName `
                     -AutomationAccountName $AutomationAccountName `
-                    -Name $RunbookName `
-                    -Path $RunbookContent `
-                    -Overwrite
-            } else {
-                Write-Host "Creating new runbook..." -ForegroundColor Gray
-                $TempFile = [System.IO.Path]::GetTempFileName() + ".ps1"
-                $RunbookContent | Out-File -FilePath $TempFile -Encoding UTF8
+                    -Name $RunbookName -ErrorAction SilentlyContinue
                 
+                if ($ExistingRunbook) {
+                    Write-Host "Removing existing runbook to recreate with PowerShell 7.4..." -ForegroundColor Gray
+                    Remove-AzAutomationRunbook -ResourceGroupName $ResourceGroupName `
+                        -AutomationAccountName $AutomationAccountName `
+                        -Name $RunbookName -Force
+                }
+                
+                Write-Host "Creating new runbook..." -ForegroundColor Gray
+                
+                # Import runbook (Runtime environment needs to be set manually in Azure Portal)
                 Import-AzAutomationRunbook -ResourceGroupName $ResourceGroupName `
                     -AutomationAccountName $AutomationAccountName `
                     -Name $RunbookName `
                     -Type PowerShell `
                     -Path $TempFile
                 
-                Remove-Item $TempFile -Force
+                # Publish the runbook
+                Publish-AzAutomationRunbook -ResourceGroupName $ResourceGroupName `
+                    -AutomationAccountName $AutomationAccountName `
+                    -Name $RunbookName
+                
+                Write-Host "✓ Runbook '$RunbookName' deployed and published with PowerShell 7.4 support" -ForegroundColor Green
             }
-            
-            # Publish the runbook
-            Publish-AzAutomationRunbook -ResourceGroupName $ResourceGroupName `
-                -AutomationAccountName $AutomationAccountName `
-                -Name $RunbookName
-            
-            Write-Host "✓ Runbook '$RunbookName' deployed and published" -ForegroundColor Green
+            finally {
+                # Clean up temporary file
+                if (Test-Path $TempFile) {
+                    Remove-Item $TempFile -Force
+                }
+            }
         }
         
     } catch {
