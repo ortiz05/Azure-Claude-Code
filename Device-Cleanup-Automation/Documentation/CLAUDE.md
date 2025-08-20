@@ -85,19 +85,48 @@ Before starting deployment:
 
 #### ✅ Successful Deployment Record
 
-**Latest Deployment (August 2025)**:
-- **Automation Account**: `test-device-cleanup-auto` 
+**Latest Deployment (August 19, 2025)**:
+- **Automation Account**: `aa-devicecleanup-08191806` (CLEANED UP AFTER TESTING)
 - **Resource Group**: `test-rg`
 - **Tenant**: `87db06e7-f38e-4c01-b926-8291bfae4996`
-- **Principal ID**: `05b343ce-4a8e-47f4-bb2e-c46a1c47f18c`
-- **Status**: ✅ Fully operational with weekly schedule
+- **Principal ID**: `362a48be-9e41-441c-9eba-021faad70d98` (REMOVED)
+- **Status**: ✅ Successfully deployed, tested, and cleaned up
 
 **Deployment Results**:
 - ✅ Runbook published successfully (`DeviceCleanupAutomation`)
-- ✅ Schedule created and linked (`DeviceCleanupAutomation-Weekly`)
-- ✅ PowerShell modules installed (Microsoft.Graph.* v2.15.0)
-- ✅ Test execution initiated (WhatIf mode)
-- ✅ Authentication validated (service principal + managed identity)
+- ✅ All 4 Graph permissions granted (Device.ReadWrite.All, User.Read.All, Directory.ReadWrite.All, Mail.Send)
+- ✅ Security group created with RBAC roles
+- ✅ Test execution validated
+- ✅ ALL TEST RESOURCES CLEANED UP
+
+#### 🚨 CRITICAL LESSONS LEARNED (Aug 19, 2025)
+
+**1. Script Issues Fixed**:
+- Removed interactive `Read-Host` prompts from deployment scripts
+- Consolidated scripts to remove `-Enhanced` and `-Fixed` suffixes
+- Fixed Graph API filter syntax issues
+
+**2. Permission Granting Solution**:
+```powershell
+# Don't use filter (causes errors):
+# $GraphSP = Get-MgServicePrincipal -Filter "appId eq '00000003-0000-0000-c000-000000000000'"
+
+# Use this instead:
+$AllSPs = Get-MgServicePrincipal -Top 999 -Property Id,AppId,DisplayName,AppRoles
+$GraphSP = $AllSPs | Where-Object { $_.AppId -eq "00000003-0000-0000-c000-000000000000" }
+```
+
+**3. ALWAYS CLEAN UP TEST RESOURCES**:
+```powershell
+# Remove Automation Account (includes Managed Identity)
+Remove-AzAutomationAccount -ResourceGroupName $RG -Name $AutomationAccountName -Force
+
+# Remove Security Group  
+Remove-MgGroup -GroupId $GroupId
+
+# Verify cleanup
+Get-AzResource -ResourceGroupName $RG
+```
 
 **Configuration Applied**:
 - **Schedule**: Weekly execution at 2:00 AM UTC

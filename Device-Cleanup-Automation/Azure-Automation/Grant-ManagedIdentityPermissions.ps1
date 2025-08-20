@@ -1,5 +1,4 @@
-# Grant-ManagedIdentityPermissions-Enhanced.ps1
-# Enhanced version with better account type detection and error handling
+# Grant-ManagedIdentityPermissions.ps1
 # Grants required Microsoft Graph permissions to Azure Automation Managed Identity
 #
 # This script must be run by a Global Administrator or Privileged Role Administrator
@@ -7,13 +6,13 @@
 #
 # Usage Examples:
 # Default authentication:
-#   .\Grant-ManagedIdentityPermissions-Enhanced.ps1 -ManagedIdentityObjectId "guid"
+#   .\Grant-ManagedIdentityPermissions.ps1 -ManagedIdentityObjectId "guid"
 #
 # Specify tenant (required):
-#   .\Grant-ManagedIdentityPermissions-Enhanced.ps1 -ManagedIdentityObjectId "guid" -TenantId "tenant-guid"
+#   .\Grant-ManagedIdentityPermissions.ps1 -ManagedIdentityObjectId "guid" -TenantId "tenant-guid"
 #
 # Custom enterprise app registration:
-#   .\Grant-ManagedIdentityPermissions-Enhanced.ps1 -ManagedIdentityObjectId "guid" -ApplicationId "app-guid" -TenantId "tenant-guid"
+#   .\Grant-ManagedIdentityPermissions.ps1 -ManagedIdentityObjectId "guid" -ApplicationId "app-guid" -TenantId "tenant-guid"
 
 #Requires -Version 7.0
 #Requires -Modules Microsoft.Graph.Authentication, Microsoft.Graph.Applications
@@ -328,7 +327,7 @@ This script REQUIRES an organizational Azure AD account.
    • Example: admin@yourcompany.onmicrosoft.com
 
 3. Re-run this script with the -TenantId parameter:
-   .\Grant-ManagedIdentityPermissions-Enhanced.ps1 ``
+   .\Grant-ManagedIdentityPermissions.ps1 ``
        -ManagedIdentityObjectId "$ManagedIdentityObjectId" ``
        -TenantId "your-tenant-id"
 

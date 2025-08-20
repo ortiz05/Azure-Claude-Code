@@ -284,8 +284,7 @@ try {
     Write-Host "The original script's functions, email templates, and logic are all included" -ForegroundColor Cyan
     
     if (-not $WhatIf) {
-        Write-Host "`nPress Enter to continue with deployment or Ctrl+C to cancel..." -ForegroundColor Yellow
-        Read-Host
+        Write-Host "`nProceeding with deployment..." -ForegroundColor Yellow
     }
     
     # Note: This is a demonstration of the enhanced approach

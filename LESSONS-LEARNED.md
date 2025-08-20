@@ -197,11 +197,46 @@ function Test-GuidFormat {
 4. Document all findings and edge cases
 5. Only proceed after successful validation
 
+### 11. Account Usage Transparency (Aug 19, 2025)
+**Problem**: Unclear which account (Global Admin vs Test Account) was used for script execution
+
+**Solution**: Always display account information before each operation
+```powershell
+function Show-AccountUsage {
+    param(
+        [string]$AccountName,
+        [string]$ClientId, 
+        [string]$Purpose,
+        [string[]]$Permissions,
+        [string]$AuthType = "Service Principal"
+    )
+    
+    Write-Host "🔐 ACCOUNT IN USE:" -ForegroundColor Cyan
+    Write-Host "==================" -ForegroundColor Cyan
+    Write-Host "Account: $AccountName" -ForegroundColor White
+    Write-Host "Client ID: $ClientId" -ForegroundColor White
+    Write-Host "Purpose: $Purpose" -ForegroundColor White
+    Write-Host "Permissions: $($Permissions -join ', ')" -ForegroundColor Gray
+    Write-Host "Auth Type: $AuthType" -ForegroundColor Gray
+    Write-Host "==================" -ForegroundColor Cyan
+}
+```
+
+**AI Agent Guidelines**:
+```markdown
+MANDATORY: Display account usage for each phase:
+1. Creation Phase: "Using Global Admin account to CREATE test resources"
+2. Execution Phase: "Using newly provisioned test account to RUN the script"  
+3. Cleanup Phase: "Using Global Admin account to REMOVE test resources"
+
+This ensures transparency and validates least-privilege principles.
+```
+
 ### Key Takeaway for AI Agents
 
 **NEVER assume any API, permission, resource, or cmdlet exists without explicit verification.**
 
 Always implement validation-first approach:
-1. Validate → 2. Test → 3. Implement → 4. Document
+1. Validate → 2. Test → 3. Implement → 4. Document → 5. **Display Account Usage Clearly**
 
-This prevents downstream failures and ensures robust, production-ready code.
+This prevents downstream failures, ensures robust production-ready code, and maintains security transparency.
